@@ -180,21 +180,28 @@ npm run clean    # removes apps/*/bin, apps/*/obj, apps/web/dist, apps/web/node_
 
 ## Trazer CLI
 
-The root `package.json` also exposes a `trazer` command (via the `bin`
-field) that wraps the same scripts:
+The root `package.json` exposes a `trazer` command (via the `bin`
+field) that wraps the root npm scripts and adds a few sub-commands
+that talk to the Trazer API:
 
 ```sh
-npx trazer           # help
-npx trazer build     # = npm run build
-npx trazer test:api  # = npm run test:api
-npx trazer clean     # = npm run clean
-npx trazer clean:git # = npm run clean:git
+npx trazer build       # = npm run build
+npx trazer test:api    # = npm run test:api
+npx trazer clean       # = npm run clean
+
+# API sub-commands (set TRAZER_TOKEN; set TRAZER_API if not local)
+npx trazer issue list GAME
+npx trazer issue create GAME "Fix the bug"
+npx trazer issue update GAME-1 --status=Done
+npx trazer issue comment GAME-1 "Shipped"
+npx trazer user me
+npx trazer config show
 ```
 
-`npx` works without installing. To put `trazer` on your `PATH`, run
-`npm link` (or `npm install -g .`) from the repo root. Long-running
-commands (`trazer dev:api`, `trazer dev:web`) belong in a sub-agent per
-[AGENTS.md](AGENTS.md).
+Generate a token from the web UI (`POST /api/auth/api-token`) and set
+`TRAZER_TOKEN=...`. `npx` works without installing; `npm link` puts
+`trazer` on your `PATH`. Long-running commands (`dev:*`) belong in a
+sub-agent per [AGENTS.md](AGENTS.md).
 
 ## FAQ
 
