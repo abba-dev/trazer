@@ -44,6 +44,19 @@ Open http://localhost:3000. The dev seed creates an admin user you
 can sign in with. For a production build with no demo data, see
 [Deploy](#deploy).
 
+## Step by step
+
+1. **Sign in** with the seeded admin (or bootstrap your own:
+   `npx trazer admin create --email=me@x --password=...`).
+2. **Create a project** with a short key — it shows up in every issue
+   (`GAME-1`, `GAME-2`).
+3. **Add an issue** with `Ctrl+N`. Title, type, priority. Done.
+4. **Drag it across the board** — ToDo → InProgress → InReview → QA →
+   Done. The position saves automatically.
+5. **Find it** with TQ: `Ctrl+K`, then `assignee = me` or `GAME-1`.
+6. **Script it** with the CLI: `npx trazer issue create GAME "Fix the bug"`
+   from your terminal or CI.
+
 ## Search like a query
 
 TQ is the search. No form to fill, no filters to click:
