@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, NavLink, useNavigate, useParams } from 'react-router'
+import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Boxes,
@@ -35,7 +35,7 @@ import { Button } from '../ui/button'
 import { CreateIssueDialog } from '../issues/create-issue-dialog'
 import { ShortcutsDialog } from './shortcuts-dialog'
 
-export function Layout({ children }: { children?: React.ReactNode }) {
+export function Layout() {
   const { projectKey } = useParams<{ projectKey: string }>()
   const { user, logout } = useAuth()
   const { theme, setTheme } = useTheme()
@@ -115,7 +115,9 @@ export function Layout({ children }: { children?: React.ReactNode }) {
           onOpenPalette={() => setPaletteOpen(true)}
           onCreate={() => setCreateOpen(true)}
         />
-        <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+        <main className="min-h-0 flex-1 overflow-auto">
+          <Outlet />
+        </main>
       </div>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} projects={projects ?? []} issues={issues ?? []} onNavigate={() => setPaletteOpen(false)} />
