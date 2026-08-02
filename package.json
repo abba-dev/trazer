@@ -1,0 +1,16 @@
+{
+  "name": "trazer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "npm run test:api && npm run test:web",
+    "test:api": "dotnet test apps/api.Tests --nologo",
+    "test:web": "npm --prefix apps/web run build",
+    "build": "npm run build:api && npm run build:web",
+    "build:api": "dotnet publish apps/api -c Release -o ./artifacts/api",
+    "build:web": "npm --prefix apps/web run build",
+    "clean": "node scripts/clean.mjs",
+    "clean:git": "git reflog expire --expire=now --all && git gc --prune=now --aggressive"
+  }
+}

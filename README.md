@@ -169,6 +169,15 @@ npm run lint                     # oxlint
 npm run build                    # tsc + vite build
 ```
 
+The same flows are also wrapped as `npm` scripts at the repo root, for
+CI and one-shot use:
+
+```sh
+npm test         # 60 dotnet tests + tsc + vite build
+npm run build    # dotnet publish + tsc + vite build
+npm run clean    # removes apps/*/bin, apps/*/obj, apps/web/dist, apps/web/node_modules
+```
+
 ## FAQ
 
 **Why another issue tracker?**
