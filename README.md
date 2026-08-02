@@ -2,12 +2,6 @@
   <img src="https://raw.githubusercontent.com/abba-dev/trazer/main/img/trzrlogo.png" width="400" alt="Trazer">
 </p>
 
-<h1 align="center">Trazer</h1>
-
-<p align="center">
-  <em>Track less. Build more.</em>
-</p>
-
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0EA5E9?style=flat-square" alt="MIT license"></a>
   <a href="apps/api"><img src="https://img.shields.io/badge/API-.NET%2010-512BD4?style=flat-square" alt=".NET 10 API"></a>
