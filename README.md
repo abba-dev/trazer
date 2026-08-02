@@ -87,14 +87,6 @@ npm run lint                     # oxlint
 npm run build                    # tsc + vite build
 ```
 
-## Documentation
-
-- [Constitution](docs/constitution.md) — the principles
-- [Manifesto](docs/manifesto.md) — why it exists
-- [API reference](docs/api.md)
-- [TQ grammar](docs/tq.md)
-- [Decisions (ADRs)](docs/decisions.md)
-
 ## License
 
 [MIT](LICENSE).

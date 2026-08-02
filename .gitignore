@@ -32,3 +32,6 @@ data/
 # Logs
 *.log
 npm-debug.log*
+
+# Private notes (not part of the repo)
+docs/
