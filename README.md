@@ -8,7 +8,6 @@
   <a href="apps/web"><img src="https://img.shields.io/badge/Web-React%20%2B%20Vite-61DAFB?style=flat-square" alt="React + Vite frontend"></a>
   <a href="#stack"><img src="https://img.shields.io/badge/DB-PostgreSQL-336791?style=flat-square" alt="PostgreSQL"></a>
   <a href="apps/api/Trazer.Query"><img src="https://img.shields.io/badge/Search-TQ-0EA5E9?style=flat-square" alt="TQ — Trazer Query"></a>
-  <a href="#deploy"><img src="https://img.shields.io/badge/Deploy-Docker%20%7C%20Native-111111?style=flat-square" alt="Docker or Native"></a>
 </p>
 
 ---
@@ -101,18 +100,8 @@ Operators: `=`, `!=`, `~`, `in (...)`. Parser + compiler live in
 | **Web** | React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, dnd-kit |
 | **API** | ASP.NET Core minimal API (.NET 10), EF Core, JWT + bcrypt |
 | **DB** | PostgreSQL |
-| **Deploy** | Docker Compose (default) or native |
 
 ## Develop
-
-Prerequisites: .NET 10 SDK, Node.js 20+, Docker (or native Postgres 15+).
-
-```sh
-docker compose up -d db
-
-cd apps/api && dotnet run        # API on :8080
-cd apps/web && npm install && npm run dev   # web on :5173
-```
 
 From the root, the same flows are wrapped as `npm` scripts:
 
@@ -146,12 +135,10 @@ first issue). Trazer is the middle: a real tracker, up and running
 in a minute.
 
 Multi-tenant? No — one team per instance, run more instances for more
-teams. Custom fields? Not yet — they land per-project, the query
-language will understand them. Why "Trazer"? It's the verb form of
-"track" in old Galician-Portuguese. Short, pronounceable, doesn't
-collide with Jira, Linear, Trello, Asana, Notion, ClickUp, Height,
-Plane, Leantime, OpenProject, or any of the other 200 trackers named
-this decade.
+teams. Why "Trazer"? It's the verb form of "track" in old
+Galician-Portuguese. Short, pronounceable, doesn't collide with Jira,
+Linear, Trello, Asana, Notion, ClickUp, Height, Plane, Leantime,
+OpenProject, or any of the other 200 trackers named this decade.
 
 ## License
 
