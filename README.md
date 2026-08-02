@@ -94,64 +94,6 @@ Fields: `assignee`, `reporter`, `status`, `priority`, `project`, `label`, `epic`
 Operators: `=`, `!=`, `~`, `in (...)`. Parser + compiler live in
 [`apps/api/Trazer.Query`](apps/api/Trazer.Query).
 
-## Deploy
-
-Two paths. The Docker one is the easy one. The native one is for the
-VPS crowd that doesn't want a daemon manager for the daemon manager.
-Both run the API on `:8080`.
-
-### Docker Compose
-
-```sh
-docker compose up -d
-```
-
-Web on `:3000`.
-
-### Native (bare metal / VPS)
-
-Any host with **PostgreSQL 15+**, **.NET 10 runtime** and **nginx** works.
-
-1. **Postgres** — create a role and database.
-   ```sh
-   sudo -u postgres createuser trazer
-   sudo -u postgres createdb -O trazer trazer
-   ```
-2. **API** — publish to `/opt/trazer/api`.
-   ```sh
-   cd apps/api && dotnet publish -c Release -o /opt/trazer/api
-   ```
-3. **Web** — build static assets.
-   ```sh
-   cd apps/web && npm ci && npm run build       # → apps/web/dist
-   ```
-4. **nginx** serves `dist/` and reverse-proxies `/api/`.
-   ```nginx
-   server {
-     listen 80;
-     server_name trazer.example.com;
-     root /opt/trazer/web/dist;
-     location / { try_files $uri $uri/ /index.html; }
-     location /api/ {
-       proxy_pass http://127.0.0.1:8080;
-       proxy_set_header Host $host;
-       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-     }
-   }
-   ```
-5. **systemd** supervises the API. The API needs `ConnectionStrings__Default`,
-   `Jwt__Key`, and `ASPNETCORE_URLS` env vars.
-   ```ini
-   [Service]
-   WorkingDirectory=/opt/trazer/api
-   ExecStart=/usr/bin/dotnet /opt/trazer/api/Trazer.Api.dll
-   Environment=ConnectionStrings__Default=Host=localhost;Database=trazer;Username=trazer;Password=...
-   Environment=Jwt__Key=<32+ random chars>
-   Environment=ASPNETCORE_URLS=http://0.0.0.0:8080
-   Restart=always
-   ```
-6. HTTPS via Caddy or Let's Encrypt + certbot.
-
 ## Stack
 
 | | |
