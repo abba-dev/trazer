@@ -1,7 +1,15 @@
 #!/usr/bin/env node
-// Trazer CLI — wraps the root npm scripts and exposes API sub-commands.
+// Trazer CLI — wraps the root npm scripts and exposes API + dev sub-commands.
 // Long-running commands (dev:*) belong in a sub-agent per AGENTS.md.
-import { spawn } from 'node:child_process'
+import { spawn, exec } from 'node:child_process'
+import { promisify } from 'node:util'
+import { platform } from 'node:os'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+
+const execAsync = promisify(exec)
+const isWindows = platform() === 'win32'
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const API = process.env.TRAZER_API ?? 'http://localhost:8080'
 const TOKEN = process.env.TRAZER_TOKEN ?? null
@@ -34,6 +42,92 @@ const runNpm = (script, args) => new Promise((resolve, reject) => {
   const proc = spawn('npm', ['run', script, ...args.filter(Boolean)], { stdio: 'inherit' })
   proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`npm run ${script} exited ${code}`))))
 })
+
+async function waitFor(url, maxAttempts = 60, intervalMs = 3000) {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(2000) })
+      if (res.ok) return true
+    } catch { /* not up yet */ }
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  return false
+}
+
+async function killTaskboardProcesses() {
+  // ponytail: only kill dotnet + node whose path or command line mentions
+  // the repo, so we never touch an unrelated process the user has running.
+  try {
+    if (isWindows) {
+      const ps = `powershell -NoProfile -Command "Get-Process -ErrorAction SilentlyContinue | Where-Object { (($_.Path -and $_.Path -match 'taskboard') -or ($_.CommandLine -and $_.CommandLine -match 'taskboard')) -and ($_.ProcessName -eq 'dotnet' -or $_.ProcessName -eq 'node') } | Stop-Process -Force"`
+      await execAsync(ps, { windowsHide: true })
+    } else {
+      await execAsync(`pkill -9 -f taskboard`).catch(() => {})
+    }
+  } catch { /* nothing to kill is fine */ }
+}
+
+const dev = {
+  native: async () => {
+    const env = {
+      ...process.env,
+      ConnectionStrings__Default: 'Host=localhost;Database=trazer;Username=trazer;Password=trazer',
+      Jwt__Key: 'dev-only-secret-change-in-production',
+      ASPNETCORE_URLS: 'http://localhost:8080',
+      ASPNETCORE_ENVIRONMENT: 'Development',
+      Demo__Enabled: 'true',
+    }
+    console.log('starting dev stack (native, assumes Postgres running on :5432)...')
+    await killTaskboardProcesses()
+    const api = spawn('dotnet', ['run', '--project', 'apps/api', '--no-launch-profile'], {
+      cwd: REPO, env, detached: true, stdio: 'ignore', windowsHide: true,
+    })
+    api.unref()
+    const web = spawn('npm', ['run', 'dev'], {
+      cwd: path.join(REPO, 'apps/web'), detached: true, stdio: 'ignore',
+      shell: isWindows, windowsHide: true,
+    })
+    web.unref()
+    const apiOk = await waitFor('http://localhost:8080/api/health')
+    const webOk = await waitFor('http://localhost:5173')
+    if (apiOk && webOk) {
+      console.log('dev stack up (native)')
+      console.log('  api:  http://localhost:8080')
+      console.log('  web:  http://localhost:5173')
+      console.log('  login: demo@trazer.dev / password123')
+      console.log('  stop: trazer dev stop')
+    } else {
+      console.error('dev stack failed to come up')
+      console.error(`  api: ${apiOk ? 'up' : 'down'}`)
+      console.error(`  web: ${webOk ? 'up' : 'down'}`)
+      process.exit(1)
+    }
+  },
+  docker: async () => {
+    console.log('starting dev stack (docker compose)...')
+    await killTaskboardProcesses()
+    await execAsync('docker compose up -d', { cwd: REPO })
+    const apiOk = await waitFor('http://localhost:8080/api/health')
+    const webOk = await waitFor('http://localhost:3000')
+    if (apiOk && webOk) {
+      console.log('docker stack up')
+      console.log('  api:  http://localhost:8080')
+      console.log('  web:  http://localhost:3000')
+      console.log('  stop: trazer dev stop')
+    } else {
+      console.error('docker stack failed to come up')
+      process.exit(1)
+    }
+  },
+  stop: async () => {
+    console.log('stopping dev stack...')
+    await killTaskboardProcesses()
+    try {
+      await execAsync('docker compose down', { cwd: REPO })
+    } catch { /* no docker compose is fine */ }
+    console.log('done')
+  },
+}
 
 const issue = {
   list: async (projectKey) => {
@@ -76,6 +170,13 @@ const user = {
   },
 }
 
+const config = {
+  show: async () => {
+    const c = await api('GET', '/api/config')
+    console.log(JSON.stringify(c, null, 2))
+  },
+}
+
 const admin = {
   create: async (...args) => {
     const flags = parseFlags(args)
@@ -87,13 +188,6 @@ const admin = {
     })
     console.log(`created admin ${r.user.email}`)
     console.log(`token: ${r.token}`)
-  },
-}
-
-const config = {
-  show: async () => {
-    const c = await api('GET', '/api/config')
-    console.log(JSON.stringify(c, null, 2))
   },
 }
 
@@ -113,9 +207,11 @@ Cleanup:
   clean         remove build artifacts
   clean:git     git reflog expire + gc
 
-Dev (long-running — sub-agent per AGENTS.md):
-  dev:api       run api
-  dev:web       run vite
+Dev (long-running — sub-agent preferred per AGENTS.md, but CLI works):
+  dev            start the dev stack (native, Postgres + API + vite)
+  dev native     same as 'dev'
+  dev docker     docker compose up -d (api on :8080, web on :3000)
+  dev stop       kill dev processes + docker compose down
 
 API (talks to $TRAZER_API, default http://localhost:8080; needs $TRAZER_TOKEN):
   issue list <project>             list issues
@@ -140,9 +236,10 @@ if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   process.exit(0)
 }
 
-const handlers = { issue, user, config, admin }
+const handlers = { issue, user, config, admin, dev }
 if (handlers[cmd]) {
-  const fn = handlers[cmd][sub]
+  // 'dev' defaults to 'native' when no subcommand given
+  const fn = (cmd === 'dev' && !sub) ? handlers.dev.native : handlers[cmd][sub]
   if (!fn) {
     console.error(`unknown ${cmd} subcommand: ${sub ?? '(none)'}`)
     process.exit(1)

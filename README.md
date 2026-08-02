@@ -36,13 +36,18 @@ One instance, one team, no per-seat license.
 
 ## Get it running
 
+The fastest way: `npx trazer dev` (or `node scripts/trazer.mjs dev`).
+It starts Postgres + API + vite, waits for health, prints the URLs.
+
+Or with Docker:
+
 ```sh
 docker compose up -d
 ```
 
-Open http://localhost:3000. The dev seed creates an admin user you
-can sign in with. For a production build with no demo data, see
-[Deploy](#deploy).
+Open http://localhost:5173 (native dev) or http://localhost:3000
+(Docker). The dev seed creates an admin user you can sign in with.
+For a production build with no demo data, see [Deploy](#deploy).
 
 ## Step by step
 
