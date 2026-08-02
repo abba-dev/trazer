@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { platform } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { readline } from 'node:readline'
 import path from 'node:path'
 
 const execAsync = promisify(exec)
@@ -68,15 +69,34 @@ async function killTaskboardProcesses() {
   } catch { /* nothing to kill is fine */ }
 }
 
+// ponytail: prompt only in a TTY. In CI/automation (no TTY) the env
+// var wins, then the default. Keeps `echo y | trazer dev` working
+// without hanging on stdin.
+async function prompt(question, defaultValue) {
+  if (!process.stdin.isTTY) return defaultValue
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+    rl.question(`${question} (default: ${defaultValue}): `, (answer) => {
+      rl.close()
+      resolve(answer.trim() || defaultValue)
+    })
+  })
+}
+
 const dev = {
   native: async () => {
+    const apiPort = process.env.TRAZER_API_PORT || await prompt('API port', '8080')
+    const webPort = process.env.TRAZER_WEB_PORT || await prompt('Web port', '5173')
     const env = {
       ...process.env,
       ConnectionStrings__Default: 'Host=localhost;Database=trazer;Username=trazer;Password=trazer',
       Jwt__Key: 'dev-only-secret-change-in-production',
-      ASPNETCORE_URLS: 'http://localhost:8080',
+      ASPNETCORE_URLS: `http://localhost:${apiPort}`,
       ASPNETCORE_ENVIRONMENT: 'Development',
       Demo__Enabled: 'true',
+      // vite.config.ts reads this for the /api proxy target — keeps the
+      // web in sync if the API port changes.
+      API_PROXY_TARGET: `http://localhost:${apiPort}`,
     }
     // ponytail: a fresh clone has no apps/web/node_modules; install before spawning vite.
     if (!existsSync(path.join(REPO, 'apps/web/node_modules'))) {
@@ -89,17 +109,17 @@ const dev = {
       cwd: REPO, env, detached: true, stdio: 'ignore', windowsHide: true,
     })
     api.unref()
-    const web = spawn('npm', ['run', 'dev'], {
-      cwd: path.join(REPO, 'apps/web'), detached: true, stdio: 'ignore',
+    const web = spawn('npm', ['run', 'dev', '--', '--port', webPort], {
+      cwd: path.join(REPO, 'apps/web'), env, detached: true, stdio: 'ignore',
       shell: isWindows, windowsHide: true,
     })
     web.unref()
-    const apiOk = await waitFor('http://localhost:8080/api/health')
-    const webOk = await waitFor('http://localhost:5173')
+    const apiOk = await waitFor(`http://localhost:${apiPort}/api/health`)
+    const webOk = await waitFor(`http://localhost:${webPort}`)
     if (apiOk && webOk) {
       console.log('dev stack up (native)')
-      console.log('  api:  http://localhost:8080')
-      console.log('  web:  http://localhost:5173')
+      console.log(`  api:  http://localhost:${apiPort}`)
+      console.log(`  web:  http://localhost:${webPort}`)
       console.log('  login: demo@trazer.dev / password123')
       console.log('  stop: trazer dev stop')
     } else {
@@ -214,10 +234,14 @@ Cleanup:
   clean:git     git reflog expire + gc
 
 Dev (long-running — sub-agent preferred per AGENTS.md, but CLI works):
-  dev            start the dev stack (native, Postgres + API + vite)
+  dev            start the dev stack (native, prompts for API + web ports)
   dev native     same as 'dev'
   dev docker     docker compose up -d (api on :8080, web on :3000)
   dev stop       kill dev processes + docker compose down
+
+Dev ports (native only — set as env vars to skip the prompt):
+  TRAZER_API_PORT  API port (default 8080)
+  TRAZER_WEB_PORT  web port (default 5173)
 
 API (talks to $TRAZER_API, default http://localhost:8080; needs $TRAZER_TOKEN):
   issue list <project>             list issues
