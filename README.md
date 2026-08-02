@@ -40,8 +40,7 @@ form. One instance, one team, no per-seat license.
 No SSO, no SAML, no per-seat license, no custom fields yet, no workflow
 engine, no plugin marketplace, no AI features, no public roadmap page,
 no marketing emails. We're not adding them unless someone shows up with
-a real reason. The constitution says [no enterprise bloat](docs/constitution.md)
-and we read it.
+a real reason. The constitution says no enterprise bloat and we read it.
 
 ## TQ
 
@@ -191,7 +190,7 @@ actually needs it.
 **Custom fields? Workflows? Plugins?**
 Not yet. The constitution says no enterprise bloat. When custom
 fields land, they'll be per-project and the query language will
-understand them. See [docs/decisions.md](docs/decisions.md).
+understand them.
 
 **Why "Trazer"?**
 It's the verb form of "track" in old Galician-Portuguese. Short,
