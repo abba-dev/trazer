@@ -90,6 +90,125 @@ public class TqParserTests
         Assert.IsType<TqComparison>(TqParser.Parse("title ~ render"));
     }
 
+    [Fact]
+    public void Parses_Is_Empty()
+    {
+        var expr = Assert.IsType<TqIsNull>(TqParser.Parse("assignee is empty"));
+        Assert.Equal("assignee", expr.Field);
+        Assert.False(expr.Not);
+    }
+
+    [Fact]
+    public void Parses_Is_Not_Empty()
+    {
+        var expr = Assert.IsType<TqIsNull>(TqParser.Parse("epic is not empty"));
+        Assert.Equal("epic", expr.Field);
+        Assert.True(expr.Not);
+    }
+
+    [Fact]
+    public void Parses_Is_Null()
+    {
+        Assert.IsType<TqIsNull>(TqParser.Parse("sprint is null"));
+        Assert.IsType<TqIsNull>(TqParser.Parse("estimate is not null"));
+    }
+
+    [Fact]
+    public void Empty_Keyword_Remains_A_Value_After_Equals()
+    {
+        var expr = Assert.IsType<TqComparison>(TqParser.Parse("label = empty"));
+        Assert.Equal("empty", Assert.IsType<TqValue.String>(expr.Value).Text);
+    }
+
+    [Fact]
+    public void Parses_CurrentUser_Function()
+    {
+        var expr = TqParser.Parse("assignee = currentUser()");
+        Assert.IsType<TqValue.Me>(Assert.IsType<TqComparison>(expr).Value);
+    }
+
+    [Fact]
+    public void Parses_Now_Function()
+    {
+        var expr = TqParser.Parse("updated <= now()");
+        Assert.IsType<TqValue.Now>(Assert.IsType<TqComparison>(expr).Value);
+    }
+
+    [Fact]
+    public void Parses_Relative_Date()
+    {
+        var expr = TqParser.Parse("created >= -7d");
+        var rel = Assert.IsType<TqValue.RelativeDate>(Assert.IsType<TqComparison>(expr).Value);
+        Assert.Equal(-7, rel.Amount);
+        Assert.Equal("d", rel.Unit);
+    }
+
+    [Fact]
+    public void Parses_Relative_Date_Week()
+    {
+        var rel = Assert.IsType<TqValue.RelativeDate>(
+            Assert.IsType<TqComparison>(TqParser.Parse("created >= -2w")).Value);
+        Assert.Equal(-2, rel.Amount);
+        Assert.Equal("w", rel.Unit);
+    }
+
+    [Fact]
+    public void Parses_Greater_Than_Operators()
+    {
+        Assert.Equal(">", Assert.IsType<TqComparison>(TqParser.Parse("estimate > 3")).Operator);
+        Assert.Equal(">=", Assert.IsType<TqComparison>(TqParser.Parse("created >= -7d")).Operator);
+        Assert.Equal("<", Assert.IsType<TqComparison>(TqParser.Parse("estimate < 3")).Operator);
+        Assert.Equal("<=", Assert.IsType<TqComparison>(TqParser.Parse("updated <= now()")).Operator);
+    }
+
+    [Fact]
+    public void Parses_Order_By()
+    {
+        var query = TqParser.ParseQuery("status = ToDo ORDER BY priority DESC");
+        var sort = Assert.Single(query.Sort);
+        Assert.Equal("priority", sort.Field);
+        Assert.True(sort.Descending);
+    }
+
+    [Fact]
+    public void Parses_Multi_Key_Order_By()
+    {
+        var query = TqParser.ParseQuery("status = ToDo ORDER BY priority DESC, created ASC");
+        Assert.Equal(2, query.Sort.Count);
+        Assert.Equal("priority", query.Sort[0].Field);
+        Assert.True(query.Sort[0].Descending);
+        Assert.Equal("created", query.Sort[1].Field);
+        Assert.False(query.Sort[1].Descending);
+    }
+
+    [Fact]
+    public void Parses_Order_By_Without_Filter()
+    {
+        var query = TqParser.ParseQuery("ORDER BY title ASC");
+        Assert.Single(query.Sort);
+        Assert.Equal("title", query.Sort[0].Field);
+    }
+
+    [Fact]
+    public void Parses_Order_By_Number_Field()
+    {
+        var query = TqParser.ParseQuery("type = Bug ORDER BY number DESC");
+        var sort = Assert.Single(query.Sort);
+        Assert.Equal("number", sort.Field);
+        Assert.True(sort.Descending);
+    }
+
+    [Theory]
+    [InlineData("status is")]
+    [InlineData("assignee is not")]
+    [InlineData("ORDER BY")]
+    [InlineData("status = ToDo ORDER BY")]
+    [InlineData("status = ToDo ORDER BY status, ")]
+    public void Throws_On_Invalid_Input2(string input)
+    {
+        Assert.Throws<TqParseException>(() => TqParser.ParseQuery(input));
+    }
+
     [Theory]
     [InlineData("status =")]
     [InlineData("status = (broken")]

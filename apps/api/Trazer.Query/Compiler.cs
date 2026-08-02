@@ -19,6 +19,7 @@ public class TqCompiler(Guid currentUserId, Func<string, Guid?> resolveUserId)
         TqOr o => Combine(o.Operands, Expression.OrElse),
         TqComparison c => CompileComparison(c),
         TqIn i => CompileIn(i),
+        TqIsNull n => CompileIsNull(n),
         _ => throw new TqParseException("Unsupported expression node")
     };
 
@@ -62,6 +63,18 @@ public class TqCompiler(Guid currentUserId, Func<string, Guid?> resolveUserId)
             {
                 "text" => Equal(Constant(n.Value), "Number"),
                 "estimate" => CompileEstimate(c.Operator, n.Value),
+                _ => ConstantFalse()
+            },
+            TqValue.Now => field switch
+            {
+                "created" => CompileDate("CreatedAt", c.Operator, DateTime.UtcNow),
+                "updated" => CompileDate("UpdatedAt", c.Operator, DateTime.UtcNow),
+                _ => ConstantFalse()
+            },
+            TqValue.RelativeDate r => field switch
+            {
+                "created" => CompileDate("CreatedAt", c.Operator, ResolveRelativeDate(r)),
+                "updated" => CompileDate("UpdatedAt", c.Operator, ResolveRelativeDate(r)),
                 _ => ConstantFalse()
             },
             TqValue.String s => CompileStringField(field, c.Operator, s.Text),
@@ -154,8 +167,60 @@ public class TqCompiler(Guid currentUserId, Func<string, Guid?> resolveUserId)
     {
         "=" => Expression.Equal(Property("Estimate"), Expression.Convert(Constant((int)value), typeof(int?))),
         "!=" => Expression.NotEqual(Property("Estimate"), Expression.Convert(Constant((int)value), typeof(int?))),
+        ">" => Expression.GreaterThan(Property("Estimate"), Expression.Convert(Constant((int)value), typeof(int?))),
+        ">=" => Expression.GreaterThanOrEqual(Property("Estimate"), Expression.Convert(Constant((int)value), typeof(int?))),
+        "<" => Expression.LessThan(Property("Estimate"), Expression.Convert(Constant((int)value), typeof(int?))),
+        "<=" => Expression.LessThanOrEqual(Property("Estimate"), Expression.Convert(Constant((int)value), typeof(int?))),
         _ => ConstantFalse()
     };
+
+    private Expression CompileDate(string property, string op, DateTime value)
+    {
+        var target = Expression.Constant(value);
+        return op switch
+        {
+            "=" => Expression.Equal(Property(property), target),
+            "!=" => Expression.NotEqual(Property(property), target),
+            ">" => Expression.GreaterThan(Property(property), target),
+            ">=" => Expression.GreaterThanOrEqual(Property(property), target),
+            "<" => Expression.LessThan(Property(property), target),
+            "<=" => Expression.LessThanOrEqual(Property(property), target),
+            _ => ConstantFalse()
+        };
+    }
+
+    private static DateTime ResolveRelativeDate(TqValue.RelativeDate r) => r.Unit switch
+    {
+        "d" => DateTime.UtcNow.AddDays(r.Amount),
+        "w" => DateTime.UtcNow.AddDays(r.Amount * 7),
+        "h" => DateTime.UtcNow.AddHours(r.Amount),
+        _ => DateTime.UtcNow
+    };
+
+    private Expression CompileIsNull(TqIsNull expr)
+    {
+        var field = expr.Field.ToLowerInvariant();
+        return field switch
+        {
+            "assignee" => NullCheck("AssigneeId", expr.Not),
+            "epic" => NullCheck("EpicId", expr.Not),
+            "sprint" => NullCheck("SprintId", expr.Not),
+            "release" => NullCheck("ReleaseId", expr.Not),
+            "estimate" => NullCheck("Estimate", expr.Not),
+            "description" => NullCheck("Description", expr.Not),
+            "title" or "text" => Expression.Constant(expr.Not),
+            _ => ConstantFalse()
+        };
+    }
+
+    private Expression NullCheck(string property, bool not)
+    {
+        var prop = Property(property);
+        var nullValue = Expression.Constant(null, prop.Type);
+        return not
+            ? Expression.NotEqual(prop, nullValue)
+            : Expression.Equal(prop, nullValue);
+    }
 
     private Expression CompileIn(TqIn expr)
     {

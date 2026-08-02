@@ -6,18 +6,62 @@ public static class TqParser
 {
     private static readonly Regex IssueKeyPattern = new(@"^([A-Za-z][A-Za-z0-9]{1,9})-(\d+)$", RegexOptions.Compiled);
     private static readonly Regex NumberPattern = new(@"^-?\d+$", RegexOptions.Compiled);
+    private static readonly Regex RelativeDatePattern = new(@"^-(\d+)([dhw])$", RegexOptions.Compiled);
 
-    public static TqExpr Parse(string input)
+    public static TqExpr Parse(string input) => ParseQuery(input).Filter;
+
+    public static TqQuery ParseQuery(string input)
     {
         var tokens = TqTokenizer.Tokenize(input);
         if (tokens.Count == 0)
-            return new TqAnd([]);
+            return new TqQuery(new TqAnd([]), []);
 
         var pos = 0;
-        var expr = ParseOr(tokens, ref pos);
+        TqExpr expr;
+        if (tokens[0].Type == TqTokenType.OrderBy)
+        {
+            expr = new TqAnd([]);
+        }
+        else
+        {
+            expr = ParseOr(tokens, ref pos);
+        }
+
+        var sort = new List<TqSortKey>();
+        if (pos < tokens.Count && tokens[pos].Type == TqTokenType.OrderBy)
+        {
+            pos++;
+            while (true)
+            {
+                if (pos >= tokens.Count)
+                    throw new TqParseException("Expected a field after ORDER BY");
+                if (tokens[pos].Type != TqTokenType.Field)
+                    throw new TqParseException($"Expected a field after ORDER BY, got '{tokens[pos].Text}' at position {tokens[pos].Position}");
+                var field = tokens[pos].Text.ToLowerInvariant();
+                pos++;
+                var descending = false;
+                if (pos < tokens.Count && tokens[pos].Type == TqTokenType.Desc)
+                {
+                    descending = true;
+                    pos++;
+                }
+                else if (pos < tokens.Count && tokens[pos].Type == TqTokenType.Asc)
+                {
+                    pos++;
+                }
+                sort.Add(new TqSortKey(field, descending));
+                if (pos < tokens.Count && tokens[pos].Type == TqTokenType.Comma)
+                {
+                    pos++;
+                    continue;
+                }
+                break;
+            }
+        }
+
         if (pos < tokens.Count)
             throw new TqParseException($"Unexpected token '{tokens[pos].Text}' at position {tokens[pos].Position}");
-        return expr;
+        return new TqQuery(expr, sort);
     }
 
     private static TqExpr ParseOr(List<TqToken> tokens, ref int pos)
@@ -78,6 +122,21 @@ public static class TqParser
         if (pos >= tokens.Count)
             throw new TqParseException($"Expected an operator after field '{field}'");
 
+        if (tokens[pos].Type == TqTokenType.Is)
+        {
+            pos++;
+            var not = false;
+            if (pos < tokens.Count && tokens[pos].Type == TqTokenType.Not)
+            {
+                not = true;
+                pos++;
+            }
+            if (pos >= tokens.Count || (tokens[pos].Type != TqTokenType.Empty && tokens[pos].Type != TqTokenType.Null))
+                throw new TqParseException($"Expected 'empty' or 'null' after 'is' for field '{field}'");
+            pos++;
+            return new TqIsNull(field, not);
+        }
+
         if (tokens[pos].Type == TqTokenType.In)
         {
             pos++;
@@ -120,8 +179,17 @@ public static class TqParser
         var text = token.Text;
         if (text.Equals("me", StringComparison.OrdinalIgnoreCase))
             return new TqValue.Me();
+        if (text.Equals("currentUser()", StringComparison.OrdinalIgnoreCase))
+            return new TqValue.Me();
+        if (text.Equals("now", StringComparison.OrdinalIgnoreCase) || text.Equals("now()", StringComparison.OrdinalIgnoreCase))
+            return new TqValue.Now();
         if (text.StartsWith('@'))
             return new TqValue.User(text[1..]);
+        if (RelativeDatePattern.IsMatch(text))
+        {
+            var m = RelativeDatePattern.Match(text);
+            return new TqValue.RelativeDate(-int.Parse(m.Groups[1].Value), m.Groups[2].Value);
+        }
         if (IssueKeyPattern.IsMatch(text))
         {
             var m = IssueKeyPattern.Match(text);
@@ -132,4 +200,3 @@ public static class TqParser
         return new TqValue.String(text);
     }
 }
-

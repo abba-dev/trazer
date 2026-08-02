@@ -6,6 +6,8 @@ public sealed record TqComparison(string Field, string Operator, TqValue Value) 
 
 public sealed record TqIn(string Field, List<TqValue> Values) : TqExpr;
 
+public sealed record TqIsNull(string Field, bool Not) : TqExpr;
+
 public sealed record TqAnd(List<TqExpr> Operands) : TqExpr;
 
 public sealed record TqOr(List<TqExpr> Operands) : TqExpr;
@@ -21,4 +23,12 @@ public abstract record TqValue
     public sealed record String(string Text) : TqValue;
 
     public sealed record Numeric(long Value) : TqValue;
+
+    public sealed record Now : TqValue;
+
+    public sealed record RelativeDate(int Amount, string Unit) : TqValue;
 }
+
+public sealed record TqSortKey(string Field, bool Descending);
+
+public sealed record TqQuery(TqExpr Filter, List<TqSortKey> Sort);

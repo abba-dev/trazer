@@ -79,6 +79,7 @@ ReleaseEndpoints.Map(app);
 LabelEndpoints.Map(app);
 EpicEndpoints.Map(app);
 SearchEndpoints.Map(app);
+FilterEndpoints.Map(app);
 
 app.Run();
 

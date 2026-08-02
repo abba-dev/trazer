@@ -136,6 +136,8 @@ function IssueBody({ issue, projectKey, number }: { issue: Issue; projectKey: st
           <TypeBadge type={issue.type} />
           <span className="ml-auto flex items-center gap-1.5">
             <Clock className="size-3" />
+            Created {new Date(issue.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+            <span className="text-muted-foreground/50">·</span>
             Updated {timeAgo(issue.updatedAt)}
           </span>
         </div>

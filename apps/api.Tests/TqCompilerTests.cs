@@ -31,7 +31,10 @@ public class TqCompilerTests
             ReporterId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
             Epic = epic is null ? null : new Epic { Name = epic },
             Sprint = sprint is null ? null : new Sprint { Name = sprint },
-            Release = release is null ? null : new Release { Name = release }
+            Release = release is null ? null : new Release { Name = release },
+            EpicId = epic is null ? null : Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            SprintId = sprint is null ? null : Guid.Parse("33333333-3333-3333-3333-333333333333"),
+            ReleaseId = release is null ? null : Guid.Parse("44444444-4444-4444-4444-444444444444")
         };
         foreach (var label in labels ?? [])
             issue.IssueLabels.Add(new IssueLabel { Label = new Label { Name = label } });
@@ -171,5 +174,95 @@ public class TqCompilerTests
         var assigned = MakeIssue();
         Assert.False(Compile("assignee != me")(unassigned));
         Assert.True(Compile("assignee != me")(assigned));
+    }
+
+    [Fact]
+    public void Is_Empty_And_Not_Empty()
+    {
+        var unassigned = MakeIssue();
+        unassigned.AssigneeId = null;
+        unassigned.Assignee = null;
+        var assigned = MakeIssue();
+
+        Assert.True(Compile("assignee is empty")(unassigned));
+        Assert.False(Compile("assignee is empty")(assigned));
+        Assert.False(Compile("assignee is not empty")(unassigned));
+        Assert.True(Compile("assignee is not empty")(assigned));
+    }
+
+    [Fact]
+    public void Is_Empty_On_Refs_And_Estimate()
+    {
+        var bare = MakeIssue();
+        Assert.True(Compile("epic is empty")(bare));
+        Assert.False(Compile("epic is not empty")(bare));
+        Assert.True(Compile("sprint is empty")(bare));
+        Assert.True(Compile("release is empty")(bare));
+        Assert.True(Compile("estimate is null")(bare));
+
+        var full = MakeIssue(epic: "UI", sprint: "S1", release: "v1");
+        full.Estimate = 5;
+        Assert.True(Compile("epic is not empty")(full));
+        Assert.True(Compile("estimate is not null")(full));
+    }
+
+    [Fact]
+    public void Description_Is_Empty()
+    {
+        var issue = MakeIssue();
+        Assert.True(Compile("description is empty")(issue));
+        issue.Description = "hello";
+        Assert.False(Compile("description is empty")(issue));
+        Assert.True(Compile("description is not empty")(issue));
+    }
+
+    [Fact]
+    public void CurrentUser_Function_Matches_Me()
+    {
+        var issue = MakeIssue();
+        Assert.True(Compile("assignee = currentUser()")(issue));
+        Assert.False(Compile("assignee = currentUser()", me: Guid.NewGuid())(issue));
+    }
+
+    [Fact]
+    public void Relative_Date_Comparison()
+    {
+        var issue = MakeIssue();
+        issue.CreatedAt = DateTime.UtcNow.AddDays(-1);
+        Assert.True(Compile("created >= -7d")(issue));
+        Assert.False(Compile("created < -7d")(issue));
+
+        issue.CreatedAt = DateTime.UtcNow.AddDays(-30);
+        Assert.False(Compile("created >= -7d")(issue));
+        Assert.True(Compile("created <= -2w")(issue));
+    }
+
+    [Fact]
+    public void Now_Comparison()
+    {
+        var issue = MakeIssue();
+        issue.UpdatedAt = DateTime.UtcNow.AddHours(-2);
+        Assert.True(Compile("updated <= now()")(issue));
+        Assert.False(Compile("updated > now()")(issue));
+    }
+
+    [Fact]
+    public void Estimate_Ordering_Operators()
+    {
+        var issue = MakeIssue();
+        issue.Estimate = 3;
+        Assert.True(Compile("estimate > 2")(issue));
+        Assert.True(Compile("estimate >= 3")(issue));
+        Assert.False(Compile("estimate > 3")(issue));
+        Assert.True(Compile("estimate < 4")(issue));
+        Assert.False(Compile("estimate < 3")(issue));
+        Assert.True(Compile("estimate <= 3")(issue));
+    }
+
+    [Fact]
+    public void Unknown_Word_Is_Implicit_Text_Search()
+    {
+        Assert.False(Compile("bogus")(MakeIssue()));
+        Assert.True(Compile("sample")(MakeIssue()));
     }
 }

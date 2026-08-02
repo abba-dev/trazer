@@ -10,7 +10,14 @@ public enum TqTokenType
     In,
     LeftParen,
     RightParen,
-    Comma
+    Comma,
+    Is,
+    Not,
+    Empty,
+    Null,
+    OrderBy,
+    Asc,
+    Desc
 }
 
 public record TqToken(TqTokenType Type, string Text, int Position);
@@ -20,8 +27,14 @@ public static class TqTokenizer
     private static readonly HashSet<string> Fields =
     [
         "assignee", "reporter", "status", "priority", "project", "label",
-        "epic", "sprint", "release", "type", "title", "description", "text", "estimate"
+        "epic", "sprint", "release", "type", "title", "description", "text", "estimate",
+        "created", "updated", "number"
     ];
+
+    private static readonly HashSet<string> FunctionCalls = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "currentuser", "now"
+    };
 
     public static List<TqToken> Tokenize(string input)
     {
@@ -43,6 +56,34 @@ public static class TqTokenizer
             if (c == ')') { tokens.Add(new TqToken(TqTokenType.RightParen, ")", i)); i++; continue; }
             if (c == ',') { tokens.Add(new TqToken(TqTokenType.Comma, ",", i)); i++; continue; }
 
+            if (c == '>')
+            {
+                if (i + 1 < length && input[i + 1] == '=')
+                {
+                    tokens.Add(new TqToken(TqTokenType.Operator, ">=", i));
+                    i += 2;
+                }
+                else
+                {
+                    tokens.Add(new TqToken(TqTokenType.Operator, ">", i));
+                    i++;
+                }
+                continue;
+            }
+            if (c == '<')
+            {
+                if (i + 1 < length && input[i + 1] == '=')
+                {
+                    tokens.Add(new TqToken(TqTokenType.Operator, "<=", i));
+                    i += 2;
+                }
+                else
+                {
+                    tokens.Add(new TqToken(TqTokenType.Operator, "<", i));
+                    i++;
+                }
+                continue;
+            }
             if (c == '=')
             {
                 tokens.Add(new TqToken(TqTokenType.Operator, "=", i)); i++; continue;
@@ -104,14 +145,83 @@ public static class TqTokenizer
             if (word.Length == 0)
                 throw new TqParseException($"Unexpected character '{input[i]}' at position {i}");
 
-            tokens.Add(word.ToLowerInvariant() switch
+            if (FunctionCalls.Contains(word) && i < length && input[i] == '(')
             {
-                "and" => new TqToken(TqTokenType.And, word, wordStart),
-                "or" => new TqToken(TqTokenType.Or, word, wordStart),
-                "in" => new TqToken(TqTokenType.In, word, wordStart),
-                _ when Fields.Contains(word.ToLowerInvariant()) => new TqToken(TqTokenType.Field, word, wordStart),
-                _ => new TqToken(TqTokenType.Value, word, wordStart)
-            });
+                i++;
+                if (i < length && input[i] == ')')
+                {
+                    i++;
+                    word += "()";
+                }
+                else
+                {
+                    throw new TqParseException($"Expected ')' after '{word}(' at position {wordStart}");
+                }
+            }
+
+            var previous = tokens.Count > 0 ? tokens[^1] : null;
+
+            if (word.Equals("and", StringComparison.OrdinalIgnoreCase))
+            {
+                tokens.Add(new TqToken(TqTokenType.And, word, wordStart));
+                continue;
+            }
+            if (word.Equals("or", StringComparison.OrdinalIgnoreCase))
+            {
+                tokens.Add(new TqToken(TqTokenType.Or, word, wordStart));
+                continue;
+            }
+            if (word.Equals("in", StringComparison.OrdinalIgnoreCase))
+            {
+                tokens.Add(new TqToken(TqTokenType.In, word, wordStart));
+                continue;
+            }
+            if (word.Equals("is", StringComparison.OrdinalIgnoreCase))
+            {
+                tokens.Add(new TqToken(TqTokenType.Is, word, wordStart));
+                continue;
+            }
+            if (word.Equals("not", StringComparison.OrdinalIgnoreCase) && previous?.Type == TqTokenType.Is)
+            {
+                tokens.Add(new TqToken(TqTokenType.Not, word, wordStart));
+                continue;
+            }
+            if (word.Equals("empty", StringComparison.OrdinalIgnoreCase) && previous?.Type is TqTokenType.Is or TqTokenType.Not)
+            {
+                tokens.Add(new TqToken(TqTokenType.Empty, word, wordStart));
+                continue;
+            }
+            if (word.Equals("null", StringComparison.OrdinalIgnoreCase) && previous?.Type is TqTokenType.Is or TqTokenType.Not)
+            {
+                tokens.Add(new TqToken(TqTokenType.Null, word, wordStart));
+                continue;
+            }
+            if (word.Equals("order", StringComparison.OrdinalIgnoreCase))
+            {
+                var after = i;
+                while (after < length && char.IsWhiteSpace(input[after]))
+                    after++;
+                if (after < length && input.AsSpan(after).StartsWith("by", StringComparison.OrdinalIgnoreCase)
+                    && (after + 2 >= length || char.IsWhiteSpace(input[after + 2]) || input[after + 2] is '(' or ')' or ','))
+                {
+                    tokens.Add(new TqToken(TqTokenType.OrderBy, "ORDER BY", wordStart));
+                    i = after + 2;
+                    continue;
+                }
+            }
+            if ((word.Equals("asc", StringComparison.OrdinalIgnoreCase) || word.Equals("desc", StringComparison.OrdinalIgnoreCase))
+                && previous?.Type == TqTokenType.Field)
+            {
+                tokens.Add(new TqToken(word.Equals("asc", StringComparison.OrdinalIgnoreCase) ? TqTokenType.Asc : TqTokenType.Desc, word, wordStart));
+                continue;
+            }
+            if (Fields.Contains(word.ToLowerInvariant()))
+            {
+                tokens.Add(new TqToken(TqTokenType.Field, word, wordStart));
+                continue;
+            }
+
+            tokens.Add(new TqToken(TqTokenType.Value, word, wordStart));
         }
 
         return tokens;

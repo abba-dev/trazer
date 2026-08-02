@@ -28,12 +28,14 @@ public static class SearchEndpoints
                 .Include(i => i.IssueLabels).ThenInclude(il => il.Label)
                 .Where(i => accessibleProjectIds.Contains(i.ProjectId));
 
+            var sortKeys = new List<TqSortKey>();
+
             if (!string.IsNullOrWhiteSpace(q))
             {
-                TqExpr expr;
+                TqQuery parsed;
                 try
                 {
-                    expr = TqParser.Parse(q);
+                    parsed = TqParser.ParseQuery(q);
                 }
                 catch (TqParseException ex)
                 {
@@ -41,12 +43,11 @@ public static class SearchEndpoints
                 }
 
                 var compiler = new TqCompiler(current.CurrentUserId, name => ResolveUserIdAsync(db, name).GetAwaiter().GetResult());
-                var predicate = compiler.Compile(expr);
-                query = query.Where(predicate);
+                query = query.Where(compiler.Compile(parsed.Filter));
+                sortKeys = parsed.Sort;
             }
 
-            var issues = await query
-                .OrderByDescending(i => i.UpdatedAt)
+            var issues = await TqSort.Apply(query, sortKeys)
                 .Take(200)
                 .ToListAsync();
             return Results.Ok(issues.Select(i => i.ToDto()));

@@ -5,21 +5,77 @@ import { DndContext, PointerSensor, useDroppable, useSensor, useSensors, type Dr
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Plus } from 'lucide-react'
-import { issueApi, STATUSES, type Issue, type Status } from '../lib/api'
+import { filterApi, issueApi, searchApi, STATUSES, type Issue, type Status } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
 import { cn } from '../lib/utils'
+import { useListNav } from '../lib/use-list-nav'
+import { useAuth } from '../lib/auth'
 import { IssueAvatar, LabelChip, PriorityIcon, TypeBadge, STATUS_META } from '../components/issues/meta'
 import { IssuePanel } from '../components/issues/issue-panel'
 import { CreateIssueDialog } from '../components/issues/create-issue-dialog'
 
 export function BoardPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+
+  const [activeFilter, setActiveFilter] = useState<string | null>(null)
+  const { data: savedFilters } = useQuery({ queryKey: queryKeys.filters, queryFn: filterApi.list })
+  const saved = savedFilters?.find((f) => f.id === activeFilter) ?? null
+  const filterQuery = saved ? `project = ${projectKey} AND (${saved.query})` : null
+  const issueQueryKey = filterQuery ? queryKeys.search(filterQuery) : queryKeys.issues(projectKey!)
 
   const { data: issues, isPending } = useQuery({
-    queryKey: queryKeys.issues(projectKey!),
-    queryFn: () => issueApi.list(projectKey!),
+    queryKey: issueQueryKey,
+    queryFn: filterQuery ? () => searchApi.query(filterQuery) : () => issueApi.list(projectKey!),
+  })
+
+  const visible = useMemo(() => {
+    const src = activeFilter === 'mine' ? (issues ?? []).filter((i) => i.assigneeId === user?.id) : (issues ?? [])
+    const sorted = [...src].sort((a, b) => a.position - b.position)
+    return STATUSES.flatMap((s) => sorted.filter((i) => i.status === s))
+  }, [issues, activeFilter, user])
+
+  const columnRanges = useMemo(() => {
+    const ranges = new Map<Status, [number, number]>()
+    visible.forEach((issue, idx) => {
+      const r = ranges.get(issue.status)
+      if (r) r[1] = idx
+      else ranges.set(issue.status, [idx, idx])
+    })
+    return ranges
+  }, [visible])
+
+  const openIssue = (issue: Issue) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('issue', issue.key)
+    setSearchParams(next)
+  }
+
+  const { selectedIndex, setItemRef } = useListNav({
+    items: visible,
+    onOpen: openIssue,
+    extra: (e, nav) => {
+      if (e.key !== 'n' && e.key !== 'p') return
+      const current = nav.selectedIndex < 0 ? null : visible[nav.selectedIndex]
+      const statuses = STATUSES.filter((s) => columnRanges.has(s))
+      const idx = current ? statuses.indexOf(current.status) : -1
+      if (e.key === 'n') {
+        const nextStatus = statuses[idx + 1]
+        if (nextStatus) {
+          e.preventDefault()
+          nav.select(columnRanges.get(nextStatus)![0])
+        }
+      } else {
+        const prevStatus = statuses[idx - 1]
+        if (prevStatus) {
+          e.preventDefault()
+          nav.select(columnRanges.get(prevStatus)![1])
+        }
+      }
+      return false
+    },
   })
 
   const [newFor, setNewFor] = useState<Status | null>(null)
@@ -31,10 +87,10 @@ export function BoardPage() {
       return issueApi.update(projectKey!, issue!.number, { status, position })
     },
     onMutate: ({ id, status, position }) => {
-      const key = queryKeys.issues(projectKey!)
-      void queryClient.cancelQueries({ queryKey: key })
-      const previous = queryClient.getQueryData<Issue[]>(key)
-      queryClient.setQueryData<Issue[]>(key, (old) => {
+      if (filterQuery) return
+      void queryClient.cancelQueries({ queryKey: issueQueryKey })
+      const previous = queryClient.getQueryData<Issue[]>(issueQueryKey)
+      queryClient.setQueryData<Issue[]>(issueQueryKey, (old) => {
         if (!old) return old
         const issue = old.find((i) => i.id === id)
         if (!issue) return old
@@ -49,9 +105,12 @@ export function BoardPage() {
       return { previous }
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(queryKeys.issues(projectKey!), ctx.previous)
+      if (ctx?.previous) queryClient.setQueryData(issueQueryKey, ctx.previous)
     },
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.issues(projectKey!) }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.issues(projectKey!) })
+      void queryClient.invalidateQueries({ queryKey: ['search'] })
+    },
   })
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -81,17 +140,39 @@ export function BoardPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
   const columns = useMemo(() => {
-    const sorted = [...(issues ?? [])].sort((a, b) => a.position - b.position)
+    const sorted = [...visible].sort((a, b) => a.position - b.position)
     return STATUSES.map((status) => ({
       status,
       issues: sorted.filter((i) => i.status === status),
     }))
-  }, [issues])
+  }, [visible])
 
   if (isPending) return <div className="p-8 text-sm text-muted-foreground">Loading board…</div>
 
   return (
     <div className="flex h-full flex-col">
+      <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
+        <QuickFilterChip
+          active={activeFilter === 'mine'}
+          onClick={() => setActiveFilter(activeFilter === 'mine' ? null : 'mine')}
+        >
+          Only my issues
+        </QuickFilterChip>
+        {savedFilters?.map((f) => (
+          <QuickFilterChip
+            key={f.id}
+            active={activeFilter === f.id}
+            title={f.query}
+            onClick={() => setActiveFilter(activeFilter === f.id ? null : f.id)}
+          >
+            {f.name}
+          </QuickFilterChip>
+        ))}
+        {savedFilters && savedFilters.length === 0 && (
+          <span className="text-[11px] text-muted-foreground">Save a search from the Search page to add quick filters</span>
+        )}
+      </div>
+
       <div className="flex flex-1 gap-3 overflow-x-auto p-4">
         <DndContext sensors={sensors} onDragEnd={onDragEnd}>
           {columns.map(({ status, issues: columnIssues }) => (
@@ -99,6 +180,9 @@ export function BoardPage() {
               key={status}
               status={status}
               issues={columnIssues}
+              visible={visible}
+              selectedIndex={selectedIndex}
+              setItemRef={setItemRef}
               onCreate={() => setNewFor(status)}
             />
           ))}
@@ -109,7 +193,14 @@ export function BoardPage() {
         open={!!createDefaults}
         defaults={createDefaults ? { status: createDefaults } : undefined}
         onOpenChange={(open) => {
-          if (!open) setNewFor(null)
+          if (!open) {
+            setNewFor(null)
+            if (searchParams.get('new')) {
+              const next = new URLSearchParams(searchParams)
+              next.delete('new')
+              setSearchParams(next, { replace: true })
+            }
+          }
         }}
       />
       <IssuePanel />
@@ -117,7 +208,48 @@ export function BoardPage() {
   )
 }
 
-function BoardColumn({ status, issues, onCreate }: { status: Status; issues: Issue[]; onCreate: () => void }) {
+function QuickFilterChip({
+  active,
+  onClick,
+  title,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  title?: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={cn(
+        'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+        active
+          ? 'border-primary/40 bg-primary/10 text-foreground'
+          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+function BoardColumn({
+  status,
+  issues,
+  visible,
+  selectedIndex,
+  setItemRef,
+  onCreate,
+}: {
+  status: Status
+  issues: Issue[]
+  visible: Issue[]
+  selectedIndex: number
+  setItemRef: (index: number) => (el: HTMLElement | null) => void
+  onCreate: () => void
+}) {
   const meta = STATUS_META[status]
   const [searchParams, setSearchParams] = useSearchParams()
   const { setNodeRef, isOver } = useDroppable({ id: `column:${status}` })
@@ -127,6 +259,8 @@ function BoardColumn({ status, issues, onCreate }: { status: Status; issues: Iss
     next.set('issue', issue.key)
     setSearchParams(next)
   }
+
+  const firstVisible = visible.findIndex((i) => i.status === status)
 
   return (
     <div
@@ -147,7 +281,13 @@ function BoardColumn({ status, issues, onCreate }: { status: Status; issues: Iss
       <SortableContext items={issues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
         <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
           {issues.map((issue) => (
-            <IssueCard key={issue.id} issue={issue} onOpen={() => openIssue(issue)} />
+            <IssueCard
+              key={issue.id}
+              issue={issue}
+              selected={selectedIndex === firstVisible + issues.indexOf(issue)}
+              itemRef={setItemRef(firstVisible + issues.indexOf(issue))}
+              onOpen={() => openIssue(issue)}
+            />
           ))}
           {issues.length === 0 && (
             <div className="flex h-20 items-center justify-center rounded-md border border-dashed text-[11px] text-muted-foreground">
@@ -160,7 +300,17 @@ function BoardColumn({ status, issues, onCreate }: { status: Status; issues: Iss
   )
 }
 
-function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
+function IssueCard({
+  issue,
+  selected,
+  itemRef,
+  onOpen,
+}: {
+  issue: Issue
+  selected: boolean
+  itemRef: (el: HTMLElement | null) => void
+  onOpen: () => void
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: issue.id })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -169,12 +319,16 @@ function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: () => void }) {
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(el) => {
+        setNodeRef(el)
+        itemRef(el)
+      }}
       style={style}
       onClick={onOpen}
       className={cn(
         'group cursor-pointer rounded-md border bg-card p-2.5 shadow-sm transition-shadow hover:shadow',
         isDragging && 'z-10 opacity-60 shadow-lg',
+        selected && 'ring-2 ring-primary/60',
       )}
     >
       <div className="mb-1.5 flex items-center gap-1.5">

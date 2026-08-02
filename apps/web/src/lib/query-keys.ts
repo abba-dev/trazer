@@ -13,4 +13,5 @@ export const queryKeys = {
   labels: (projectKey: string) => ['labels', projectKey] as const,
   users: ['users'] as const,
   search: (q: string) => ['search', q] as const,
+  filters: ['filters'] as const,
 }

@@ -12,10 +12,11 @@ import {
   Plus,
   Search,
   Sun,
+  X,
   Zap,
   type LucideIcon,
 } from 'lucide-react'
-import { issueApi, projectApi, type Issue, type Project } from '../../lib/api'
+import { issueApi, projectApi, filterApi, type Issue, type Project, type SavedFilter } from '../../lib/api'
 import { queryKeys } from '../../lib/query-keys'
 import { useAuth } from '../../lib/auth'
 import { useTheme } from '../../lib/theme'
@@ -32,16 +33,20 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu'
 import { Button } from '../ui/button'
 import { CreateIssueDialog } from '../issues/create-issue-dialog'
+import { ShortcutsDialog } from './shortcuts-dialog'
 
 export function Layout({ children }: { children?: React.ReactNode }) {
   const { projectKey } = useParams<{ projectKey: string }>()
   const { user, logout } = useAuth()
   const { theme, setTheme } = useTheme()
+  const navigate = useNavigate()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const queryClient = useQueryClient()
 
   const { data: projects } = useQuery({ queryKey: queryKeys.projects, queryFn: projectApi.list })
+  const { data: filters } = useQuery({ queryKey: queryKeys.filters, queryFn: filterApi.list })
   const { data: issues } = useQuery({
     queryKey: queryKeys.issues(projectKey ?? ''),
     queryFn: () => issueApi.list(projectKey!),
@@ -50,18 +55,52 @@ export function Layout({ children }: { children?: React.ReactNode }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const typing =
+        target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setPaletteOpen((open) => !open)
+        return
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault()
         setCreateOpen(true)
+        return
+      }
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return
+
+      switch (e.key) {
+        case '?':
+          e.preventDefault()
+          setHelpOpen(true)
+          break
+        case 'c':
+          e.preventDefault()
+          setCreateOpen(true)
+          break
+        case '/':
+          e.preventDefault()
+          setPaletteOpen(true)
+          break
+        case '1':
+          if (projectKey) {
+            e.preventDefault()
+            navigate(`/projects/${projectKey}/backlog`)
+          }
+          break
+        case '2':
+          if (projectKey) {
+            e.preventDefault()
+            navigate(`/projects/${projectKey}/board`)
+          }
+          break
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [projectKey, navigate])
 
   const invalidateProject = () => {
     void queryClient.invalidateQueries({ queryKey: ['issues', projectKey] })
@@ -69,7 +108,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
-      <Sidebar projects={projects ?? []} activeKey={projectKey} user={user} onLogout={logout} theme={theme} onTheme={setTheme} />
+      <Sidebar projects={projects ?? []} filters={filters ?? []} activeKey={projectKey} user={user} onLogout={logout} theme={theme} onTheme={setTheme} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
           project={projectKey ? projects?.find((p) => p.key === projectKey) : undefined}
@@ -80,6 +119,8 @@ export function Layout({ children }: { children?: React.ReactNode }) {
       </div>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} projects={projects ?? []} issues={issues ?? []} onNavigate={() => setPaletteOpen(false)} />
+
+      <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
 
       <CreateIssueDialog
         open={createOpen}
@@ -94,6 +135,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
 
 function Sidebar({
   projects,
+  filters,
   activeKey,
   user,
   onLogout,
@@ -101,12 +143,14 @@ function Sidebar({
   onTheme,
 }: {
   projects: Project[]
+  filters: SavedFilter[]
   activeKey?: string
   user: { name: string; email: string } | null
   onLogout: () => void
   theme: string
   onTheme: (t: 'light' | 'dark' | 'system') => void
 }) {
+  const queryClient = useQueryClient()
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r bg-sidebar">
       <div className="flex h-14 items-center gap-2 border-b px-4">
@@ -119,7 +163,32 @@ function Sidebar({
       <div className="flex-1 overflow-y-auto px-3 py-4">
         <SidebarSection label="Workspace">
           <SidebarLink to="/projects" icon={Boxes} label="Projects" active />
+          <SidebarLink to="/search" icon={Search} label="Search" />
         </SidebarSection>
+        {filters.length > 0 && (
+          <SidebarSection label="Filters">
+            {filters.map((f) => (
+              <div key={f.id} className="group relative">
+                <Link
+                  to={`/search?q=${encodeURIComponent(f.query)}`}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 pr-7 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+                  title={`${f.name} — ${f.query}`}
+                >
+                  <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                </Link>
+                <button
+                  onClick={() => {
+                    void filterApi.remove(f.id).then(() => queryClient.invalidateQueries({ queryKey: queryKeys.filters }))
+                  }}
+                  className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-destructive group-hover:block"
+                  title="Delete filter"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </SidebarSection>
+        )}
         <SidebarSection label="Projects">
           {projects?.map((p) => (
             <SidebarLink

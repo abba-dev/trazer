@@ -43,6 +43,8 @@ public record HistoryEntryDto(Guid Id, string Field, string? OldValue, string? N
 
 public record AttachmentDto(Guid Id, string FileName, string ContentType, long Size, UserDto UploadedBy, DateTime UploadedAt);
 
+public record SavedFilterDto(Guid Id, string Name, string Query, DateTime CreatedAt);
+
 public static class Mapping
 {
     public static UserDto ToDto(this User u) => new(u.Id, u.Email, u.Name);
@@ -65,6 +67,8 @@ public static class Mapping
 
     public static AttachmentDto ToDto(this Attachment a) =>
         new(a.Id, a.FileName, a.ContentType, a.Size, a.UploadedBy!.ToDto(), a.UploadedAt);
+
+    public static SavedFilterDto ToDto(this SavedFilter f) => new(f.Id, f.Name, f.Query, f.CreatedAt);
 
     public static IssueDto ToDto(this Issue i) =>
         new(

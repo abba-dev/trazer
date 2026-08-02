@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Calendar, ChevronDown, ListChecks, Loader2, Plus } from 'lucide-react'
 import { epicApi, issueApi, sprintApi, type Epic, type Issue, type Sprint } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
+import { useListNav } from '../lib/use-list-nav'
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
@@ -11,6 +12,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { IssueAvatar, LabelChip } from '../components/issues/meta'
 import { IssuePanel } from '../components/issues/issue-panel'
 import { cn } from '../lib/utils'
+
+type NavProps = {
+  visible: Issue[]
+  selectedId?: string
+  setItemRef: (index: number) => (el: HTMLElement | null) => void
+}
 
 export function BacklogPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
@@ -57,6 +64,37 @@ export function BacklogPage() {
   const backlog = (issues ?? []).filter((i) => i.sprintId == null && i.status !== 'Done')
   const done = (issues ?? []).filter((i) => i.status === 'Done')
 
+  const visible = useMemo(() => {
+    const bySprint = new Map<string, Issue[]>()
+    const rest: Issue[] = []
+    const doneList: Issue[] = []
+    for (const i of issues ?? []) {
+      if (i.sprintId) {
+        const arr = bySprint.get(i.sprintId) ?? []
+        arr.push(i)
+        bySprint.set(i.sprintId, arr)
+      } else if (i.status === 'Done') {
+        doneList.push(i)
+      } else {
+        rest.push(i)
+      }
+    }
+    return [...(sprints ?? []).flatMap((s) => bySprint.get(s.id) ?? []), ...rest, ...doneList]
+  }, [issues, sprints])
+
+  const { selectedIndex, setItemRef } = useListNav({
+    items: visible,
+    enabled: visible.length > 0 && !isPending,
+    onOpen: (issue) => {
+      void queryClient.prefetchQuery({
+        queryKey: queryKeys.issue(projectKey!, issue.number),
+        queryFn: () => issueApi.get(projectKey!, issue.number),
+      })
+      openIssue(issue)
+    },
+  })
+  const selectedId = selectedIndex >= 0 ? visible[selectedIndex]?.id : undefined
+
   if (isPending) return <div className="p-8 text-sm text-muted-foreground">Loading backlog…</div>
 
   return (
@@ -74,6 +112,7 @@ export function BacklogPage() {
           sprint={sprint}
           issues={(issues ?? []).filter((i) => i.sprintId === sprint.id)}
           onAssign={(issueNumber, sprintId) => assign.mutate({ issueNumber, sprintId })}
+          nav={{ visible, selectedId, setItemRef }}
         />
       ))}
 
@@ -88,13 +127,14 @@ export function BacklogPage() {
           epics={epics ?? []}
           onOpen={openIssue}
           onAssign={(issueNumber, sprintId) => assign.mutate({ issueNumber, sprintId })}
+          nav={{ visible, selectedId, setItemRef }}
         />
       </section>
 
       {done.length > 0 && (
         <section>
           <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Done ({done.length})</h3>
-          <IssueList issues={done} epics={epics ?? []} onOpen={openIssue} onAssign={() => undefined} collapsed />
+          <IssueList issues={done} epics={epics ?? []} onOpen={openIssue} onAssign={() => undefined} collapsed nav={{ visible, selectedId, setItemRef }} />
         </section>
       )}
 
@@ -132,10 +172,12 @@ function SprintSection({
   sprint,
   issues,
   onAssign,
+  nav,
 }: {
   sprint: Sprint
   issues: Issue[]
   onAssign: (issueNumber: number, sprintId: string | null) => void
+  nav: NavProps
 }) {
   const { projectKey } = useParams<{ projectKey: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -187,7 +229,7 @@ function SprintSection({
         </DropdownMenu>
       </div>
       {!collapsed && (
-        <IssueList issues={issues} epics={[]} onOpen={openIssue} onAssign={onAssign} />
+        <IssueList issues={issues} epics={[]} onOpen={openIssue} onAssign={onAssign} nav={nav} />
       )}
     </section>
   )
@@ -199,12 +241,14 @@ function IssueList({
   onOpen,
   onAssign,
   collapsed = false,
+  nav,
 }: {
   issues: Issue[]
   epics: Epic[]
   onOpen: (issue: Issue) => void
   onAssign: (issueNumber: number, sprintId: string | null) => void
   collapsed?: boolean
+  nav: NavProps
 }) {
   const { projectKey } = useParams<{ projectKey: string }>()
   const queryClient = useQueryClient()
@@ -254,26 +298,33 @@ function IssueList({
         <p className="px-4 py-6 text-center text-xs text-muted-foreground">No issues here.</p>
       ) : (
         <ul>
-          {filtered.map((issue, idx) => (
-            <li key={issue.id}>
-              {idx > 0 && <hr className="mx-3 border-t border-border/60" />}
-              <div className="flex items-center gap-3 px-3 py-2 hover:bg-accent/40">
-                <span className="font-mono text-[11px] text-muted-foreground">{issue.key}</span>
-                <button onClick={() => handleOpen(issue)} className="min-w-0 flex-1 truncate text-left text-[13px] font-medium hover:underline">
-                  {issue.title}
-                </button>
-                {epicFilter == null && issue.epicName && (
-                  <span className="hidden text-[11px] text-muted-foreground md:inline">◈ {issue.epicName}</span>
-                )}
-                {issue.labels.slice(0, 2).map((l) => (
-                  <LabelChip key={l.id} name={l.name} color={l.color} />
-                ))}
-                <span className="hidden text-[11px] text-muted-foreground sm:inline">{issue.estimate != null ? `${issue.estimate} pts` : ''}</span>
-                {issue.assignee ? <IssueAvatar issue={issue} /> : <span className="size-6" />}
-                <SprintSelect sprintId={issue.sprintId} onSelect={(sprintId) => onAssign(issue.number, sprintId)} />
-              </div>
-            </li>
-          ))}
+          {filtered.map((issue) => {
+            const navIndex = nav.visible.indexOf(issue)
+            return (
+              <li key={issue.id}>
+                {navIndex > 0 && <hr className="mx-3 border-t border-border/60" />}
+                <div className={cn('flex items-center gap-3 px-3 py-2 hover:bg-accent/40', issue.id === nav.selectedId && 'bg-accent/40')}>
+                  <span className="font-mono text-[11px] text-muted-foreground">{issue.key}</span>
+                  <button
+                    ref={navIndex >= 0 ? nav.setItemRef(navIndex) : undefined}
+                    onClick={() => handleOpen(issue)}
+                    className="min-w-0 flex-1 truncate text-left text-[13px] font-medium hover:underline"
+                  >
+                    {issue.title}
+                  </button>
+                  {epicFilter == null && issue.epicName && (
+                    <span className="hidden text-[11px] text-muted-foreground md:inline">◈ {issue.epicName}</span>
+                  )}
+                  {issue.labels.slice(0, 2).map((l) => (
+                    <LabelChip key={l.id} name={l.name} color={l.color} />
+                  ))}
+                  <span className="hidden text-[11px] text-muted-foreground sm:inline">{issue.estimate != null ? `${issue.estimate} pts` : ''}</span>
+                  {issue.assignee ? <IssueAvatar issue={issue} /> : <span className="size-6" />}
+                  <SprintSelect sprintId={issue.sprintId} onSelect={(sprintId) => onAssign(issue.number, sprintId)} />
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

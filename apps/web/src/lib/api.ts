@@ -41,6 +41,13 @@ export type Project = {
   createdAt: string
 }
 
+export type SavedFilter = {
+  id: string
+  name: string
+  query: string
+  createdAt: string
+}
+
 export class ApiError extends Error {
   status: number
   code: string
@@ -213,6 +220,13 @@ export const labelApi = {
 
 export const searchApi = {
   query: (q: string) => api.get<Issue[]>(`/search?q=${encodeURIComponent(q)}`),
+}
+
+export const filterApi = {
+  list: () => api.get<SavedFilter[]>('/filters'),
+  create: (data: { name: string; query: string }) => api.post<SavedFilter>('/filters', data),
+  update: (id: string, data: { name?: string; query?: string }) => api.patch<SavedFilter>(`/filters/${id}`, data),
+  remove: (id: string) => api.delete(`/filters/${id}`),
 }
 
 export function formatKey(projectKey: string, number: number): string {
