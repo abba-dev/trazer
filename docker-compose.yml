@@ -21,6 +21,7 @@ services:
     environment:
       ConnectionStrings__Default: "Host=db;Database=trazer;Username=trazer;Password=trazer"
       Jwt__Key: "dev-only-secret-change-in-production"
+      ASPNETCORE_URLS: "http://+:8080"
       ASPNETCORE_ENVIRONMENT: Production
     ports:
       - "8080:8080"

@@ -17,10 +17,10 @@ public static class ProjectEndpoints
             var projects = await db.Projects
                 .Where(p => p.OwnerId == current.CurrentUserId
                     || p.Members.Any(m => m.UserId == current.CurrentUserId))
+                .OrderBy(p => p.Name)
                 .Select(p => new ProjectDto(
                     p.Id, p.Key, p.Name, p.Description,
                     p.Issues.Count, p.CreatedAt))
-                .OrderBy(p => p.Name)
                 .ToListAsync();
             return Results.Ok(projects);
         });

@@ -58,12 +58,18 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<TrazerDbContext>();
+    db.Database.Migrate();
+}
+
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseCors("dev");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 
 AuthEndpoints.Map(app);
 ProjectEndpoints.Map(app);

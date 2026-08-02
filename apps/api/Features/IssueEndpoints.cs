@@ -270,7 +270,7 @@ public static class IssueEndpoints
             var path = Path.Combine(UploadsPath, attachment.StoredName);
             if (!File.Exists(path))
                 throw ApiException.NotFound("Attachment file missing");
-            return Results.File(path, attachment.ContentType, attachment.FileName);
+            return Results.File(Path.GetFullPath(path), attachment.ContentType, attachment.FileName);
         });
 
         group.MapDelete("/issues/{number}/attachments/{attachmentId}", async (string projectKey, int number, Guid attachmentId, TrazerDbContext db) =>
