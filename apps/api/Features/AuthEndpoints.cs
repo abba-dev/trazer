@@ -21,6 +21,9 @@ public static class AuthEndpoints
             if (!BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
                 throw ApiException.BadRequest("Invalid email or password");
 
+            if (user.Disabled)
+                throw ApiException.BadRequest("Account disabled");
+
             return Results.Ok(new { token = tokens.CreateToken(user.Id, user.Email), user = user.ToDto() });
         });
 
@@ -61,8 +64,33 @@ public static class AuthEndpoints
             await db.SaveChangesAsync();
             return Results.Created($"/auth/me", user.ToDto());
         }).RequireAuthorization();
+
+        // Admin-only: disable/enable an account or reset its password. An admin can't disable themselves.
+        group.MapPatch("/users/{id}", async (Guid id, UpdateUserRequest req, TrazerDbContext db, CurrentUserService current) =>
+        {
+            var actor = await db.Users.FindAsync(current.CurrentUserId)
+                ?? throw ApiException.Unauthorized();
+            if (!actor.IsAdmin)
+                throw ApiException.Forbidden("Only admins can modify accounts");
+
+            var user = await db.Users.FindAsync(id)
+                ?? throw ApiException.NotFound("User not found");
+            if (user.Id == actor.Id && req.Disabled == true)
+                throw ApiException.BadRequest("You cannot disable your own account");
+
+            if (req.Disabled is { } disabled) user.Disabled = disabled;
+            if (!string.IsNullOrEmpty(req.Password))
+            {
+                if (req.Password.Length < 8)
+                    throw ApiException.BadRequest("Password must be at least 8 characters");
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password);
+            }
+            await db.SaveChangesAsync();
+            return Results.Ok(user.ToDto());
+        }).RequireAuthorization();
     }
 }
 
 public record LoginRequest(string Email, string Password);
 public record CreateUserRequest(string Email, string Name, string Password, bool IsAdmin = false);
+public record UpdateUserRequest(bool? Disabled, string? Password);

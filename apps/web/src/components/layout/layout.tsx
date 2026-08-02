@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   Sun,
+  Users,
   X,
   Zap,
   type LucideIcon,
@@ -174,6 +175,7 @@ function Sidebar({
         <SidebarSection label="Workspace">
           <SidebarLink to="/projects" icon={Boxes} label="Projects" active />
           <SidebarLink to="/search" icon={Search} label="Search" />
+          {isAdmin && <SidebarLink to="/admin/users" icon={Users} label="Users" end={false} />}
         </SidebarSection>
         {filters.length > 0 && (
           <SidebarSection label="Filters">

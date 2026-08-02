@@ -11,6 +11,7 @@ import { BacklogPage } from './pages/backlog-page'
 import { SprintsPage } from './pages/sprints-page'
 import { ReleasesPage } from './pages/releases-page'
 import { SearchPage } from './pages/search-page'
+import { AdminUsersPage } from './pages/admin-users-page'
 import { Loader2 } from 'lucide-react'
 
 const queryClient = new QueryClient({
@@ -59,6 +60,7 @@ export default function App() {
                   <Route path="/" element={<Navigate to="/projects" replace />} />
                   <Route path="/projects" element={<ProjectsPage />} />
                   <Route path="/search" element={<SearchPage />} />
+                  <Route path="/admin/users" element={<AdminUsersPage />} />
                   <Route path="/projects/:projectKey/board" element={<BoardPage />} />
                   <Route path="/projects/:projectKey/backlog" element={<BacklogPage />} />
                   <Route path="/projects/:projectKey/sprints" element={<SprintsPage />} />

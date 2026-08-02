@@ -1,4 +1,4 @@
-export type User = { id: string; email: string; name: string; isAdmin: boolean }
+export type User = { id: string; email: string; name: string; isAdmin: boolean; disabled: boolean }
 export type Label = { id: string; name: string; color: string }
 export type Epic = { id: string; name: string; summary: string | null; color: string; issueCount: number }
 export type Sprint = { id: string; name: string; goal: string | null; startDate: string | null; endDate: string | null; isActive: boolean; issueCount: number }
@@ -131,6 +131,8 @@ export const authApi = {
   users: () => api.get<User[]>('/auth/users'),
   createUser: (data: { email: string; name: string; password: string; isAdmin?: boolean }) =>
     api.post<User>('/auth/users', data),
+  updateUser: (id: string, data: { disabled?: boolean; password?: string }) =>
+    api.patch<User>(`/auth/users/${id}`, data),
 }
 
 export const projectApi = {
