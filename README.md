@@ -19,32 +19,34 @@
 
 ---
 
-Software development shouldn't need enterprise software to track an
-issue. Trazer is the issue tracker that gets out of the way: a board,
-a backlog, sprints, releases, and a query language instead of a search
-form. One instance, one team, no per-seat license.
+The issue tracker that gets out of your way. A board, a backlog,
+sprints, releases, and a query language instead of a search form.
+One instance, one team, no per-seat license.
 
-## Features
+## What's in it
 
-- **Board** — drag issues between columns, drop into empty ones. Two clicks, no forms.
-- **Backlog** — plan into sprints, filter by epic, watch the points add up.
-- **Sprints & releases** — start one, end one, ship one. Progress shows up without you asking.
-- **Issue panel** — every field editable inline. Comments, history, attachments, all in the side panel. No "edit screen" round-trip.
-- **TQ — Trazer Query** — search is a query, not a form. `assignee = me`, `status in (Done, QA)`, `GAME-1`. 60 tests cover the parser.
-- **Keyboard first** — `Ctrl+K` to search, `Ctrl+N` to create, `o` to open, `?` for the cheat sheet. The mouse is optional.
-- **Per-project** — labels, epics and members live on the project, not in a global admin panel. No cross-tenant weirdness.
-- **History** — every change recorded: who, what, from what, to what, when. No audit log to enable, no retention policy to write.
+- **Board** — drag issues between columns, drop into empty ones
+- **Backlog** — plan into sprints, filter by epic, watch the points
+- **Sprints & releases** — start one, end one, ship one
+- **Issue panel** — every field editable inline, no round-trip
+- **TQ** — search is a query, not a form (`assignee = me`, `GAME-1`)
+- **Keyboard first** — `Ctrl+K`, `Ctrl+N`, `o`, `?` for the cheat sheet
+- **Per-project** — labels, epics and members live on the project
+- **History** — every change recorded: who, what, from what, to what
 
-## What it's not
+## Get it running
 
-No SSO, no SAML, no per-seat license, no custom fields yet, no workflow
-engine, no plugin marketplace, no AI features, no public roadmap page,
-no marketing emails. We're not adding them unless someone shows up with
-a real reason. The constitution says no enterprise bloat and we read it.
+```sh
+docker compose up -d
+```
 
-## TQ
+Open http://localhost:3000. The dev seed creates an admin user you
+can sign in with. For a production build with no demo data, see
+[Deploy](#deploy).
 
-Search is a query, not a form:
+## Search like a query
+
+TQ is the search. No form to fill, no filters to click:
 
 ```
 assignee = me                           my issues
@@ -57,36 +59,27 @@ GAME-1                                  by key
 
 Fields: `assignee`, `reporter`, `status`, `priority`, `project`, `label`, `epic`,
 `sprint`, `release`, `type`, `title`, `description`, `text`, `estimate`.
-Operators: `=`, `!=`, `~`, `in (...)`. Grammar and implementation live in
+Operators: `=`, `!=`, `~`, `in (...)`. Parser + compiler live in
 [`apps/api/Trazer.Query`](apps/api/Trazer.Query).
-
-## Quick start
-
-```sh
-docker compose up -d
-```
-
-- Web: http://localhost:3000
-- API: http://localhost:8080
 
 ## Deploy
 
 Two paths. The Docker one is the easy one. The native one is for the
 VPS crowd that doesn't want a daemon manager for the daemon manager.
+Both run the API on `:8080`.
 
-### Docker Compose (default)
+### Docker Compose
 
 ```sh
 docker compose up -d
 ```
 
-Web on `:3000`, API on `:8080`. OAuth providers are opt-in via the
-commented `Google__*` / `GitHub__*` in `docker-compose.yml`.
+Web on `:3000`. OAuth providers are opt-in via the commented
+`Google__*` / `GitHub__*` in `docker-compose.yml`.
 
 ### Native (bare metal / VPS)
 
-Any host with **PostgreSQL 15+**, **.NET 10 runtime** and **nginx** (or
-any static server) works. The API listens on `:8080` in both deploys.
+Any host with **PostgreSQL 15+**, **.NET 10 runtime** and **nginx** works.
 
 1. **Postgres** — create a role and database.
    ```sh
@@ -115,8 +108,8 @@ any static server) works. The API listens on `:8080` in both deploys.
      }
    }
    ```
-5. **systemd** supervises the API. Required env vars live in the unit, not
-   the repo.
+5. **systemd** supervises the API. The API needs `ConnectionStrings__Default`,
+   `Jwt__Key`, and `ASPNETCORE_URLS` env vars.
    ```ini
    [Service]
    WorkingDirectory=/opt/trazer/api
@@ -128,103 +121,64 @@ any static server) works. The API listens on `:8080` in both deploys.
    ```
 6. HTTPS via Caddy or Let's Encrypt + certbot.
 
-Required env (the API won't start without `Jwt__Key`):
-`ConnectionStrings__Default`, `Jwt__Key`, `ASPNETCORE_URLS`. OAuth
-providers are off until `Google__*` / `GitHub__*` are set.
-
 ## Stack
 
-- **Web** — React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, dnd-kit
-- **API** — ASP.NET Core minimal API (.NET 10), EF Core, JWT + bcrypt
-- **DB** — PostgreSQL
-- **Deploy** — Docker Compose (default) or native (Postgres + .NET + nginx)
+| | |
+|---|---|
+| **Web** | React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, dnd-kit |
+| **API** | ASP.NET Core minimal API (.NET 10), EF Core, JWT + bcrypt |
+| **DB** | PostgreSQL |
+| **Deploy** | Docker Compose (default) or native |
 
-## Repo layout
-
-```
-apps/
-  api/        ASP.NET Core minimal API
-  api.Tests/  TQ parser/compiler tests (60 tests)
-  web/        React frontend
-```
-
-## Development
+## Develop
 
 Prerequisites: .NET 10 SDK, Node.js 20+, Docker (or native Postgres 15+).
 
 ```sh
-docker compose up -d db          # PostgreSQL
+docker compose up -d db
 
-cd apps/api
-dotnet run                       # API on http://localhost:8080 (set ASPNETCORE_URLS)
-
-cd apps/web
-npm install
-npm run dev                      # web on http://localhost:5173 (proxies /api to :8080)
+cd apps/api && dotnet run        # API on :8080
+cd apps/web && npm install && npm run dev   # web on :5173
 ```
 
-```sh
-dotnet test                      # 60 tests
-npm run lint                     # oxlint
-npm run build                    # tsc + vite build
-```
-
-The same flows are also wrapped as `npm` scripts at the repo root, for
-CI and one-shot use:
+From the root, the same flows are wrapped as `npm` scripts:
 
 ```sh
 npm test         # 60 dotnet tests + tsc + vite build
 npm run build    # dotnet publish + tsc + vite build
-npm run clean    # removes apps/*/bin, apps/*/obj, apps/web/dist, apps/web/node_modules
+npm run clean    # remove build artifacts
 ```
 
-## Trazer CLI
+### Trazer CLI
 
-The root `package.json` exposes a `trazer` command (via the `bin`
-field) that wraps the root npm scripts and adds a few sub-commands
-that talk to the Trazer API:
+A small CLI for scripting against the API:
 
 ```sh
-npx trazer build       # = npm run build
-npx trazer test:api    # = npm run test:api
-npx trazer clean       # = npm run clean
-
-# API sub-commands (set TRAZER_TOKEN; set TRAZER_API if not local)
 npx trazer issue list GAME
 npx trazer issue create GAME "Fix the bug"
 npx trazer issue update GAME-1 --status=Done
-npx trazer issue comment GAME-1 "Shipped"
 npx trazer user me
-npx trazer config show
 ```
 
-Generate a token from the web UI (`POST /api/auth/api-token`) and set
-`TRAZER_TOKEN=...`. `npx` works without installing; `npm link` puts
-`trazer` on your `PATH`. Long-running commands (`dev:*`) belong in a
-sub-agent per [AGENTS.md](AGENTS.md).
+Set `TRAZER_TOKEN` (a JWT or API token) and `TRAZER_API` (default
+`http://localhost:8080`). Run `npx trazer` for the full help. Long-
+running commands (`dev:*`) belong in a sub-agent per
+[AGENTS.md](AGENTS.md).
 
-## FAQ
+## Why
 
-**Why another issue tracker?**
 Because the alternatives are either too thin (sticky notes don't
-survive a sprint) or too thick (the next one needs a consultant to
-configure). Trazer is the middle: a real tracker, no consultants.
+survive a sprint) or too heavy (a week of configuration before your
+first issue). Trazer is the middle: a real tracker, up and running
+in a minute.
 
-**Multi-tenant? Multi-team?**
-One team per instance. Run it for your team, run more instances for
-more teams. We're not shipping "projects as a tenant" until someone
-actually needs it.
-
-**Custom fields? Workflows? Plugins?**
-Not yet. The constitution says no enterprise bloat. When custom
-fields land, they'll be per-project and the query language will
-understand them.
-
-**Why "Trazer"?**
-It's the verb form of "track" in old Galician-Portuguese. Short,
-pronounceable in any language, doesn't collide with Jira, Linear,
-Trello, Asana, Notion, ClickUp, Height, Plane, Leantime,
-OpenProject, or any of the other 200 trackers named this decade.
+Multi-tenant? No — one team per instance, run more instances for more
+teams. Custom fields? Not yet — they land per-project, the query
+language will understand them. Why "Trazer"? It's the verb form of
+"track" in old Galician-Portuguese. Short, pronounceable, doesn't
+collide with Jira, Linear, Trello, Asana, Notion, ClickUp, Height,
+Plane, Leantime, OpenProject, or any of the other 200 trackers named
+this decade.
 
 ## License
 
