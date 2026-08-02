@@ -35,3 +35,6 @@ npm-debug.log*
 
 # Private notes (not part of the repo)
 docs/
+
+# Design explorations (not part of the repo)
+moodboard/

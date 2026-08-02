@@ -1,4 +1,4 @@
-![Trazer](https://raw.githubusercontent.com/abba-dev/trazer/main/moodboard/trzrlogo.png)
+![Trazer](https://raw.githubusercontent.com/abba-dev/trazer/main/img/trzrlogo.png)
 
 # Trazer
 
