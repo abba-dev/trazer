@@ -30,18 +30,38 @@ One instance, one team, no per-seat license.
 
 ## Get it running
 
-The fastest way: `npx trazer dev` (or `node scripts/trazer.mjs dev`).
-It starts Postgres + API + vite, waits for health, prints the URLs.
+### Native
 
-Or with Docker:
+Prereqs: Node 20+, .NET 10 SDK, Postgres 15+ on `localhost:5432` with
+a `trazer` user and db.
 
-```sh
-docker compose up -d
-```
+1. **Clone** the repo:
+   ```sh
+   git clone https://github.com/abba-dev/trazer.git && cd trazer
+   ```
+2. **Run** the dev script — it installs `apps/web/node_modules` if
+   missing, spawns the API on `:8080` and vite on `:5173`, waits for
+   both to respond, and prints the URL:
+   ```sh
+   node scripts/trazer.mjs dev
+   ```
+3. **Open** the URL the script prints (default `http://localhost:5173`).
 
-Open http://localhost:5173 (native dev) or http://localhost:3000
-(Docker). The dev seed creates an admin user you can sign in with.
-For a production build with no demo data, see [Deploy](#deploy).
+To stop: `node scripts/trazer.mjs dev stop`.
+
+### Docker
+
+Prereqs: Docker.
+
+1. **Clone** the repo:
+   ```sh
+   git clone https://github.com/abba-dev/trazer.git && cd trazer
+   ```
+2. **Run** compose:
+   ```sh
+   docker compose up -d
+   ```
+3. **Open** `http://localhost:3000`.
 
 ## Step by step
 

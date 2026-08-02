@@ -2,6 +2,7 @@
 // Trazer CLI — wraps the root npm scripts and exposes API + dev sub-commands.
 // Long-running commands (dev:*) belong in a sub-agent per AGENTS.md.
 import { spawn, exec } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { platform } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -76,6 +77,11 @@ const dev = {
       ASPNETCORE_URLS: 'http://localhost:8080',
       ASPNETCORE_ENVIRONMENT: 'Development',
       Demo__Enabled: 'true',
+    }
+    // ponytail: a fresh clone has no apps/web/node_modules; install before spawning vite.
+    if (!existsSync(path.join(REPO, 'apps/web/node_modules'))) {
+      console.log('apps/web/node_modules missing — running npm install...')
+      await execAsync('npm install', { cwd: path.join(REPO, 'apps/web') })
     }
     console.log('starting dev stack (native, assumes Postgres running on :5432)...')
     await killTaskboardProcesses()
