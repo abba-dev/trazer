@@ -1,5 +1,8 @@
 <Solution>
   <Folder Name="/apps/" />
+  <Folder Name="/apps/api.Tests/">
+    <Project Path="apps/api.Tests/Trazer.Api.Tests.csproj" />
+  </Folder>
   <Folder Name="/apps/api/">
     <Project Path="apps/api/Trazer.Api.csproj" />
   </Folder>
