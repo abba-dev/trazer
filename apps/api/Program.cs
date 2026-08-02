@@ -1,5 +1,7 @@
 using System.Text;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Trazer.Api.Common;
@@ -26,9 +28,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(1)
         };
-    });
+    })
+    .AddScheme<AuthenticationSchemeOptions, ApiTokenHandler>(ApiTokenDefaults.AuthenticationScheme, null);
 
-builder.Services.AddAuthorization();
+// Public REST API accepts both session JWTs and long-lived API tokens.
+builder.Services.AddAuthorization(options =>
+{
+    options.DefaultPolicy = new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme, ApiTokenDefaults.AuthenticationScheme)
+        .RequireAuthenticatedUser()
+        .Build();
+});
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddDbContext<TrazerDbContext>(options =>
@@ -41,8 +50,9 @@ builder.Services.AddDbContext<TrazerDbContext>(options =>
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddScoped<CurrentUserService>();
 builder.Services.AddHttpClient<OAuthService>();
+builder.Services.AddSingleton<WebhookService>();
 
-if (builder.Environment.IsDevelopment())
+if (builder.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Demo:Enabled"))
 {
     builder.Services.AddHostedService<SeedHostedService>();
 }
@@ -72,6 +82,13 @@ app.UseAuthorization();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 
+// Public config so the UI can adapt (e.g. show the demo entry point) without a build-time flag.
+app.MapGet("/api/config", (IConfiguration config) => Results.Ok(new
+{
+    demo = config.GetValue<bool>("Demo:Enabled"),
+    demoEmail = Trazer.Api.Services.DemoDefaults.Email
+}));
+
 AuthEndpoints.Map(app);
 OAuthEndpoints.Map(app);
 ProjectEndpoints.Map(app);
@@ -82,6 +99,7 @@ LabelEndpoints.Map(app);
 EpicEndpoints.Map(app);
 SearchEndpoints.Map(app);
 FilterEndpoints.Map(app);
+WebhookEndpoints.Map(app);
 
 app.Run();
 

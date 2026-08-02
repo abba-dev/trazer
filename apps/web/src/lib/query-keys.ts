@@ -14,4 +14,5 @@ export const queryKeys = {
   users: ['users'] as const,
   search: (q: string) => ['search', q] as const,
   filters: ['filters'] as const,
+  config: ['config'] as const,
 }

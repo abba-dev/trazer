@@ -127,9 +127,13 @@ export const api = {
   },
 }
 
+export type AppConfig = { demo: boolean; demoEmail: string }
+
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<{ token: string; user: User }>('/auth/login', { email, password }),
+  demoLogin: () => api.post<{ token: string; user: User }>('/auth/demo-login'),
+  config: () => api.get<AppConfig>('/config'),
   me: () => api.get<User>('/auth/me'),
   users: () => api.get<User[]>('/auth/users'),
   createUser: (data: { email: string; name: string; password: string; isAdmin?: boolean }) =>

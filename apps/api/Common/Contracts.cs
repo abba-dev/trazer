@@ -49,6 +49,8 @@ public record AllowedDomainDto(Guid Id, string Domain);
 
 public record AllowedEmailDto(Guid Id, string Email);
 
+public record WebhookDto(Guid Id, string Url, string Events, string Secret, DateTime CreatedAt);
+
 public static class Mapping
 {
     public static UserDto ToDto(this User u) => new(u.Id, u.Email, u.Name, u.IsAdmin, u.Disabled);
@@ -77,6 +79,8 @@ public static class Mapping
     public static AllowedDomainDto ToDto(this AllowedDomain d) => new(d.Id, d.Domain);
 
     public static AllowedEmailDto ToDto(this AllowedEmail e) => new(e.Id, e.Email);
+
+    public static WebhookDto ToDto(this Webhook w) => new(w.Id, w.Url, w.Events, w.Secret, w.CreatedAt);
 
     public static IssueDto ToDto(this Issue i) =>
         new(

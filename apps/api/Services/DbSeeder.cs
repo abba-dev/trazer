@@ -4,6 +4,11 @@ using Trazer.Api.Domain;
 
 namespace Trazer.Api.Services;
 
+public static class DemoDefaults
+{
+    public const string Email = "demo@trazer.dev";
+}
+
 public static class DbSeeder
 {
     public static async Task SeedAsync(TrazerDbContext db)
@@ -13,7 +18,7 @@ public static class DbSeeder
 
         var user = new User
         {
-            Email = "demo@trazer.dev",
+            Email = DemoDefaults.Email,
             Name = "Demo User",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("password123"),
             IsAdmin = true

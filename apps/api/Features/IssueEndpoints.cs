@@ -57,7 +57,7 @@ public static class IssueEndpoints
             return Results.Ok(issues.Select(i => i.ToDto()));
         });
 
-        group.MapPost("/issues", async (string projectKey, CreateIssueRequest req, TrazerDbContext db, CurrentUserService current) =>
+        group.MapPost("/issues", async (string projectKey, CreateIssueRequest req, TrazerDbContext db, CurrentUserService current, WebhookService webhooks) =>
         {
             var project = await GetProjectAsync(db, projectKey);
             var nextNumber = await NextIssueNumberAsync(db, project.Id);
@@ -101,6 +101,7 @@ public static class IssueEndpoints
             }
 
             var created = await GetIssueAsync(db, project.Id, issue.Number);
+            await webhooks.DispatchAsync(db, project.Id, "issue.created", current.CurrentUserId, created.ToDto());
             return Results.Created($"/projects/{project.Key}/issues/{issue.Number}", created.ToDto());
         });
 
@@ -111,7 +112,7 @@ public static class IssueEndpoints
             return Results.Ok(issue.ToDto());
         });
 
-        group.MapPatch("/issues/{number}", async (string projectKey, int number, UpdateIssueRequest req, TrazerDbContext db, CurrentUserService current) =>
+        group.MapPatch("/issues/{number}", async (string projectKey, int number, UpdateIssueRequest req, TrazerDbContext db, CurrentUserService current, WebhookService webhooks) =>
         {
             var project = await GetProjectAsync(db, projectKey);
             var issue = await GetIssueWithHistoryAsync(db, project.Id, number);
@@ -142,15 +143,18 @@ public static class IssueEndpoints
 
             issue.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
+            await webhooks.DispatchAsync(db, project.Id, "issue.updated", actorId, issue.ToDto());
             return Results.Ok(issue.ToDto());
         });
 
-        group.MapDelete("/issues/{number}", async (string projectKey, int number, TrazerDbContext db) =>
+        group.MapDelete("/issues/{number}", async (string projectKey, int number, TrazerDbContext db, CurrentUserService current, WebhookService webhooks) =>
         {
             var project = await GetProjectAsync(db, projectKey);
             var issue = await GetIssueAsync(db, project.Id, number);
+            var dto = issue.ToDto();
             db.Issues.Remove(issue);
             await db.SaveChangesAsync();
+            await webhooks.DispatchAsync(db, project.Id, "issue.deleted", current.CurrentUserId, dto);
             return Results.NoContent();
         });
 
@@ -177,7 +181,7 @@ public static class IssueEndpoints
             return Results.Ok(comments.Select(c => c.ToDto()));
         });
 
-        group.MapPost("/issues/{number}/comments", async (string projectKey, int number, CreateCommentRequest req, TrazerDbContext db, CurrentUserService current) =>
+        group.MapPost("/issues/{number}/comments", async (string projectKey, int number, CreateCommentRequest req, TrazerDbContext db, CurrentUserService current, WebhookService webhooks) =>
         {
             var project = await GetProjectAsync(db, projectKey);
             var issue = await GetIssueAsync(db, project.Id, number);
@@ -193,6 +197,7 @@ public static class IssueEndpoints
             db.Comments.Add(comment);
             await db.SaveChangesAsync();
             await db.Entry(comment).Reference(c => c.Author).LoadAsync();
+            await webhooks.DispatchAsync(db, project.Id, "issue.commented", current.CurrentUserId, new { comment.IssueId, comment.Id, comment.Body, comment.CreatedAt });
             return Results.Created($"/projects/{project.Key}/issues/{number}/comments/{comment.Id}", comment.ToDto());
         });
 

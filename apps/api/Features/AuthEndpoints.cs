@@ -88,6 +88,43 @@ public static class AuthEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(user.ToDto());
         }).RequireAuthorization();
+
+        // Self-service API token for the public REST API. Stored as SHA-256; shown once.
+        group.MapPost("/api-token", async (TrazerDbContext db, CurrentUserService current) =>
+        {
+            var user = await db.Users.FindAsync(current.CurrentUserId)
+                ?? throw ApiException.Unauthorized();
+
+            var token = ApiTokenDefaults.HeaderPrefix +
+                Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48))
+                    .Replace('+', '-').Replace('/', '_').TrimEnd('=');
+            user.ApiTokenHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
+            user.ApiTokenCreatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { token });
+        }).RequireAuthorization();
+
+        group.MapDelete("/api-token", async (TrazerDbContext db, CurrentUserService current) =>
+        {
+            var user = await db.Users.FindAsync(current.CurrentUserId)
+                ?? throw ApiException.Unauthorized();
+            user.ApiTokenHash = null;
+            user.ApiTokenCreatedAt = null;
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization();
+
+        // Demo mode only (Demo__Enabled=true): one-click login as the seeded demo user.
+        group.MapPost("/demo-login", async (IConfiguration config, TrazerDbContext db, TokenService tokens) =>
+        {
+            if (!config.GetValue<bool>("Demo:Enabled"))
+                throw ApiException.NotFound();
+            var user = await db.Users.SingleOrDefaultAsync(u => u.Email == DemoDefaults.Email)
+                ?? throw ApiException.BadRequest("Demo user not seeded");
+            if (user.Disabled)
+                throw ApiException.BadRequest("Account disabled");
+            return Results.Ok(new { token = tokens.CreateToken(user.Id, user.Email), user = user.ToDto() });
+        });
     }
 }
 

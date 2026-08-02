@@ -18,7 +18,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react'
-import { issueApi, projectApi, filterApi, type Issue, type Project, type SavedFilter } from '../../lib/api'
+import { issueApi, projectApi, filterApi, authApi, type Issue, type Project, type SavedFilter } from '../../lib/api'
 import { queryKeys } from '../../lib/query-keys'
 import { useAuth } from '../../lib/auth'
 import { useTheme } from '../../lib/theme'
@@ -51,6 +51,7 @@ export function Layout() {
 
   const { data: projects } = useQuery({ queryKey: queryKeys.projects, queryFn: projectApi.list })
   const { data: filters } = useQuery({ queryKey: queryKeys.filters, queryFn: filterApi.list })
+  const { data: config } = useQuery({ queryKey: queryKeys.config, queryFn: authApi.config, staleTime: Infinity })
   const { data: issues } = useQuery({
     queryKey: queryKeys.issues(projectKey ?? ''),
     queryFn: () => issueApi.list(projectKey!),
@@ -116,6 +117,7 @@ export function Layout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
           project={projectKey ? projects?.find((p) => p.key === projectKey) : undefined}
+          demo={!!config?.demo}
           onOpenPalette={() => setPaletteOpen(true)}
           onCreate={() => setCreateOpen(true)}
         />
@@ -303,7 +305,7 @@ function SidebarLink({
   )
 }
 
-function Topbar({ project, onOpenPalette, onCreate }: { project?: Project; onOpenPalette: () => void; onCreate: () => void }) {
+function Topbar({ project, demo, onOpenPalette, onCreate }: { project?: Project; demo: boolean; onOpenPalette: () => void; onCreate: () => void }) {
   const { projectKey } = useParams<{ projectKey: string }>()
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
@@ -313,7 +315,12 @@ function Topbar({ project, onOpenPalette, onCreate }: { project?: Project; onOpe
           <span className="rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{project.key}</span>
         </div>
       ) : (
-        <h1 className="text-sm font-semibold">Trazer</h1>
+        <h1 className="flex items-center gap-2 text-sm font-semibold">
+          Trazer
+          {demo && (
+            <span className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Demo</span>
+          )}
+        </h1>
       )}
 
       {projectKey && (

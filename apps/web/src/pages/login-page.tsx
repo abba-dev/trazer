@@ -1,20 +1,29 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router'
-import { Loader2, Zap } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Loader2, Sparkles, Zap } from 'lucide-react'
 import { useAuth } from '../lib/auth'
+import { authApi } from '../lib/api'
+import { queryKeys } from '../lib/query-keys'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Separator } from '../components/ui/separator'
 
 export function LoginPage() {
-  const { user, loading, login } = useAuth()
+  const { user, loading, login, demoLogin } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const [demoPending, setDemoPending] = useState(false)
+  const { data: config } = useQuery({
+    queryKey: queryKeys.config,
+    queryFn: authApi.config,
+    staleTime: Infinity,
+  })
 
   if (!loading && user) return <Navigate to="/projects" replace />
 
@@ -38,6 +47,19 @@ export function LoginPage() {
     }
   }
 
+  const enterDemo = async () => {
+    setError(null)
+    setDemoPending(true)
+    try {
+      await demoLogin()
+      navigate(from, { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setDemoPending(false)
+    }
+  }
+
   return (
     <div className="flex min-h-dvh items-center justify-center bg-muted/30 px-4">
       <div className="w-full max-w-sm">
@@ -45,9 +67,23 @@ export function LoginPage() {
           <span className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Zap className="size-6" />
           </span>
-          <h1 className="text-xl font-bold tracking-tight">Trazer</h1>
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
+            Trazer
+            {config?.demo && (
+              <span className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Demo
+              </span>
+            )}
+          </h1>
           <p className="text-sm text-muted-foreground">Track less. Build more.</p>
         </div>
+
+        {config?.demo && (
+          <Button type="button" className="mb-4 w-full" disabled={demoPending} onClick={enterDemo}>
+            {demoPending ? <Loader2 className="mr-1 size-4 animate-spin" /> : <Sparkles className="mr-1 size-4" />}
+            Try the demo
+          </Button>
+        )}
 
         <form onSubmit={submit} className="grid gap-4 rounded-lg border bg-card p-6 shadow-sm">
           <div className="grid gap-1.5">
@@ -102,9 +138,11 @@ export function LoginPage() {
           </p>
         </form>
 
-        <p className="mt-4 text-center text-[11px] text-muted-foreground">
-          Demo: demo@trazer.dev / password123
-        </p>
+        {config?.demo && (
+          <p className="mt-4 text-center text-[11px] text-muted-foreground">
+            Or sign in with {config.demoEmail} / password123
+          </p>
+        )}
       </div>
     </div>
   )
