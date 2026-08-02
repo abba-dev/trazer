@@ -1,14 +1,16 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router'
+import { Navigate, useLocation, useNavigate } from 'react-router'
 import { Loader2, Zap } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
+import { Separator } from '../components/ui/separator'
 
 export function LoginPage() {
   const { user, loading, login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -16,13 +18,19 @@ export function LoginPage() {
 
   if (!loading && user) return <Navigate to="/projects" replace />
 
+  const from = (location.state as { from?: string } | null)?.from ?? '/projects'
+
+  const beginOAuth = (provider: string) => {
+    window.location.assign(`/api/auth/oauth/${provider}/begin?redirect=${encodeURIComponent(from)}`)
+  }
+
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     setPending(true)
     try {
       await login(email, password)
-      navigate('/projects', { replace: true })
+      navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -73,6 +81,21 @@ export function LoginPage() {
             {pending && <Loader2 className="mr-1 size-4 animate-spin" />}
             Sign in
           </Button>
+
+          <div className="flex items-center gap-3">
+            <Separator className="flex-1" />
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">or</span>
+            <Separator className="flex-1" />
+          </div>
+
+          <div className="grid gap-2">
+            <Button type="button" variant="outline" onClick={() => beginOAuth('google')}>
+              Continue with Google
+            </Button>
+            <Button type="button" variant="outline" onClick={() => beginOAuth('github')}>
+              Continue with GitHub
+            </Button>
+          </div>
 
           <p className="mt-4 text-center text-[11px] text-muted-foreground">
             No self-service sign-up — ask an admin to create your account.

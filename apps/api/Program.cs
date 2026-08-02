@@ -40,6 +40,7 @@ builder.Services.AddDbContext<TrazerDbContext>(options =>
 
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddScoped<CurrentUserService>();
+builder.Services.AddHttpClient<OAuthService>();
 
 if (builder.Environment.IsDevelopment())
 {
@@ -72,6 +73,7 @@ app.UseAuthorization();
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 
 AuthEndpoints.Map(app);
+OAuthEndpoints.Map(app);
 ProjectEndpoints.Map(app);
 IssueEndpoints.Map(app);
 SprintEndpoints.Map(app);

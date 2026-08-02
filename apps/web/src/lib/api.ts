@@ -48,6 +48,9 @@ export type SavedFilter = {
   createdAt: string
 }
 
+export type AllowedDomain = { id: string; domain: string }
+export type AllowedEmail = { id: string; email: string }
+
 export class ApiError extends Error {
   status: number
   code: string
@@ -133,6 +136,12 @@ export const authApi = {
     api.post<User>('/auth/users', data),
   updateUser: (id: string, data: { disabled?: boolean; password?: string }) =>
     api.patch<User>(`/auth/users/${id}`, data),
+  allowedDomains: () => api.get<AllowedDomain[]>('/auth/allowed-domains'),
+  addAllowedDomain: (domain: string) => api.post<AllowedDomain>('/auth/allowed-domains', { value: domain }),
+  removeAllowedDomain: (id: string) => api.delete(`/auth/allowed-domains/${id}`),
+  allowedEmails: () => api.get<AllowedEmail[]>('/auth/allowed-emails'),
+  addAllowedEmail: (email: string) => api.post<AllowedEmail>('/auth/allowed-emails', { value: email }),
+  removeAllowedEmail: (id: string) => api.delete(`/auth/allowed-emails/${id}`),
 }
 
 export const projectApi = {

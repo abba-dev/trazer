@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -82,6 +82,22 @@ export function IssuePanel() {
 function IssueBody({ issue, projectKey, number }: { issue: Issue; projectKey: string; number: number }) {
   const queryClient = useQueryClient()
 
+  // ponytail: `e` shortcut lives here (mounted only while the panel is open), same guards as useListNav so typing in inputs never triggers it
+  const titleEdit = useRef<(() => void) | null>(null)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key.toLowerCase() === 'e') {
+        e.preventDefault()
+        titleEdit.current?.()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const update = useMutation({
     mutationFn: (patch: Record<string, unknown>) =>
       issueApi.update(projectKey, number, {
@@ -141,7 +157,7 @@ function IssueBody({ issue, projectKey, number }: { issue: Issue; projectKey: st
             Updated {timeAgo(issue.updatedAt)}
           </span>
         </div>
-        <h2 className="text-base font-semibold leading-snug">{issue.title}</h2>
+        <TitleEditor issue={issue} onSave={(title) => update.mutate({ title })} editRequestRef={titleEdit} />
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <InlineStatus status={issue.status} onSelect={(status) => update.mutate({ status })} />
           <InlinePriority priority={issue.priority} onSelect={(priority) => update.mutate({ priority })} />
@@ -184,6 +200,67 @@ function IssueBody({ issue, projectKey, number }: { issue: Issue; projectKey: st
         </div>
       </div>
     </div>
+  )
+}
+
+function TitleEditor({ issue, onSave, editRequestRef }: {
+  issue: Issue
+  onSave: (title: string) => void
+  editRequestRef?: RefObject<(() => void) | null>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(issue.title)
+  const exiting = useRef(false)
+  useEffect(() => { setValue(issue.title) }, [issue.title])
+
+  const requestEdit = () => {
+    exiting.current = false
+    setEditing(true)
+  }
+  useEffect(() => {
+    if (!editRequestRef) return
+    editRequestRef.current = requestEdit
+    return () => { editRequestRef.current = null }
+  }, [editRequestRef])
+
+  // ponytail: exiting guards the blur that fires when the input unmounts after Enter/buttons, so onSave never runs twice
+  const commit = () => {
+    if (exiting.current) return
+    const trimmed = value.trim()
+    exiting.current = true
+    setEditing(false)
+    if (trimmed && trimmed !== issue.title) onSave(trimmed)
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <Input
+          autoFocus
+          className="h-8 flex-1 text-base font-semibold leading-snug md:text-base"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit()
+            else if (e.key === 'Escape') { setValue(issue.title); setEditing(false) }
+          }}
+          onBlur={commit}
+        />
+        <Button size="sm" className="shrink-0" onMouseDown={(e) => e.preventDefault()} onClick={commit}>
+          <Save className="mr-1 size-3.5" /> Save
+        </Button>
+        <Button size="sm" variant="ghost" className="shrink-0" onMouseDown={(e) => e.preventDefault()} onClick={() => { setValue(issue.title); setEditing(false) }}>
+          Cancel
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <button className="group -mx-1 block w-full rounded-md px-1 py-0.5 text-left hover:bg-accent/50" onClick={requestEdit}>
+      <h2 className="text-base font-semibold leading-snug">{issue.title}</h2>
+    </button>
   )
 }
 

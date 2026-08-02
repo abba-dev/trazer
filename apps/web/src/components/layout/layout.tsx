@@ -11,6 +11,7 @@ import {
   Package,
   Plus,
   Search,
+  ShieldCheck,
   Sun,
   Users,
   X,
@@ -176,6 +177,7 @@ function Sidebar({
           <SidebarLink to="/projects" icon={Boxes} label="Projects" active />
           <SidebarLink to="/search" icon={Search} label="Search" />
           {isAdmin && <SidebarLink to="/admin/users" icon={Users} label="Users" end={false} />}
+          {isAdmin && <SidebarLink to="/admin/allowlist" icon={ShieldCheck} label="Allowlist" end={false} />}
         </SidebarSection>
         {filters.length > 0 && (
           <SidebarSection label="Filters">
