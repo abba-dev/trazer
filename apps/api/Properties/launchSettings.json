@@ -1,5 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/launchsettings.json",
+  "_comment": "Dev-only defaults (dotnet run / VS). For deploy, Trazer's API listens on :8080 in both Docker and native paths — see README.md → Deploy. Set ASPNETCORE_URLS to override.",
   "profiles": {
     "http": {
       "commandName": "Project",

@@ -49,6 +49,68 @@ docker compose up -d
 Demo account (dev seed): `demo@trazer.dev` / `password123` — comes with a project,
 12 issues, 4 labels, 3 epics, 2 sprints and a release.
 
+## Deploy
+
+Trazer is a standard Postgres + .NET + static-web app. Two paths.
+
+### Docker Compose (default)
+
+```sh
+docker compose up -d
+```
+
+Web on `:3000`, API on `:8080`. See `docker-compose.yml` for env vars
+(OAuth providers are opt-in via the commented `Google__*` / `GitHub__*`).
+
+### Native (bare metal / VPS)
+
+Any host with **PostgreSQL 15+**, **.NET 10 runtime** and **nginx** (or
+any static server) works. The API listens on `:8080` in both deploys.
+
+1. **Postgres** — create a role and database.
+   ```sh
+   sudo -u postgres createuser trazer
+   sudo -u postgres createdb -O trazer trazer
+   ```
+2. **API** — publish to `/opt/trazer/api`.
+   ```sh
+   cd apps/api && dotnet publish -c Release -o /opt/trazer/api
+   ```
+3. **Web** — build static assets.
+   ```sh
+   cd apps/web && npm ci && npm run build       # → apps/web/dist
+   ```
+4. **nginx** serves `dist/` and reverse-proxies `/api/`.
+   ```nginx
+   server {
+     listen 80;
+     server_name trazer.example.com;
+     root /opt/trazer/web/dist;
+     location / { try_files $uri $uri/ /index.html; }
+     location /api/ {
+       proxy_pass http://127.0.0.1:8080;
+       proxy_set_header Host $host;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+     }
+   }
+   ```
+5. **systemd** supervises the API. Required env vars live in the unit, not
+   the repo.
+   ```ini
+   [Service]
+   WorkingDirectory=/opt/trazer/api
+   ExecStart=/usr/bin/dotnet /opt/trazer/api/Trazer.Api.dll
+   Environment=ConnectionStrings__Default=Host=localhost;Database=trazer;Username=trazer;Password=...
+   Environment=Jwt__Key=<32+ random chars>
+   Environment=ASPNETCORE_URLS=http://0.0.0.0:8080
+   Restart=always
+   ```
+6. HTTPS via Caddy or Let's Encrypt + certbot.
+
+Required env (the API won't start without `Jwt__Key`):
+`ConnectionStrings__Default`, `Jwt__Key`, `ASPNETCORE_URLS`. OAuth
+providers are off until `Google__*` / `GitHub__*` are set.
+
 ## Stack
 
 - **Web**: React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, dnd-kit

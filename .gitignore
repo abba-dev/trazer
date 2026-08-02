@@ -38,3 +38,6 @@ docs/
 
 # Design explorations (not part of the repo)
 moodboard/
+
+# Internal scratchpads (prompts to other models — never commit)
+PROMPT_*.md
