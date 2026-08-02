@@ -9,7 +9,7 @@ public static class SprintEndpoints
 {
     public static void Map(WebApplication app)
     {
-        var group = app.MapGroup("/projects/{projectKey}/sprints").RequireAuthorization();
+        var group = app.MapGroup("/api/projects/{projectKey}/sprints").RequireAuthorization();
 
         group.MapGet("/", async (string projectKey, TrazerDbContext db) =>
         {

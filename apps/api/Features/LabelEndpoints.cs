@@ -9,7 +9,7 @@ public static class LabelEndpoints
 {
     public static void Map(WebApplication app)
     {
-        var group = app.MapGroup("/projects/{projectKey}/labels").RequireAuthorization();
+        var group = app.MapGroup("/api/projects/{projectKey}/labels").RequireAuthorization();
 
         group.MapGet("/", async (string projectKey, TrazerDbContext db) =>
         {

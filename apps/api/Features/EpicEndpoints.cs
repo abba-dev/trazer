@@ -9,7 +9,7 @@ public static class EpicEndpoints
 {
     public static void Map(WebApplication app)
     {
-        var group = app.MapGroup("/projects/{projectKey}/epics").RequireAuthorization();
+        var group = app.MapGroup("/api/projects/{projectKey}/epics").RequireAuthorization();
 
         group.MapGet("/", async (string projectKey, TrazerDbContext db) =>
         {

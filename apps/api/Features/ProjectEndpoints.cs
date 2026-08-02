@@ -10,7 +10,7 @@ public static class ProjectEndpoints
 {
     public static void Map(WebApplication app)
     {
-        var group = app.MapGroup("/projects").RequireAuthorization();
+        var group = app.MapGroup("/api/projects").RequireAuthorization();
 
         group.MapGet("/", async (TrazerDbContext db, CurrentUserService current) =>
         {

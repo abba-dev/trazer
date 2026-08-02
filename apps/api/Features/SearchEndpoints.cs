@@ -10,7 +10,7 @@ public static class SearchEndpoints
 {
     public static void Map(WebApplication app)
     {
-        app.MapGet("/search", async (string? q, TrazerDbContext db, CurrentUserService current) =>
+        app.MapGet("/api/search", async (string? q, TrazerDbContext db, CurrentUserService current) =>
         {
             var accessibleProjectIds = await db.Projects
                 .Where(p => p.OwnerId == current.CurrentUserId

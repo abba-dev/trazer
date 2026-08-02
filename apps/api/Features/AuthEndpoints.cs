@@ -10,7 +10,7 @@ public static class AuthEndpoints
 {
     public static void Map(WebApplication app)
     {
-        var group = app.MapGroup("/auth");
+        var group = app.MapGroup("/api/auth");
 
         group.MapPost("/register", async (RegisterRequest req, TrazerDbContext db) =>
         {

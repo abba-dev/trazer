@@ -12,7 +12,7 @@ public static class IssueEndpoints
 
     public static void Map(WebApplication app)
     {
-        var group = app.MapGroup("/projects/{projectKey}").RequireAuthorization();
+        var group = app.MapGroup("/api/projects/{projectKey}").RequireAuthorization();
 
         group.MapGet("/issues", async (string projectKey, TrazerDbContext db,
             string? status, string? sprint, string? epic, string? release, Guid? assigneeId, string? q) =>
@@ -86,6 +86,20 @@ public static class IssueEndpoints
             };
             db.Issues.Add(issue);
             await db.SaveChangesAsync();
+
+            if (req.LabelIds is { Length: > 0 })
+            {
+                var validLabelIds = await db.Labels
+                    .Where(l => l.ProjectId == project.Id)
+                    .Select(l => l.Id)
+                    .ToListAsync();
+                foreach (var labelId in req.LabelIds.Distinct().Where(validLabelIds.Contains))
+                {
+                    db.IssueLabels.Add(new IssueLabel { IssueId = issue.Id, LabelId = labelId });
+                }
+                await db.SaveChangesAsync();
+            }
+
             var created = await GetIssueAsync(db, project.Id, issue.Number);
             return Results.Created($"/projects/{project.Key}/issues/{issue.Number}", created.ToDto());
         });
@@ -108,22 +122,22 @@ public static class IssueEndpoints
             if (req.Type is not null) TrackChange(db, issue, "type", issue.Type.ToString(), req.Type, actorId);
             if (req.Status is not null) TrackChange(db, issue, "status", issue.Status.ToString(), req.Status, actorId);
             if (req.Priority is not null) TrackChange(db, issue, "priority", issue.Priority.ToString(), req.Priority, actorId);
-            if (req.AssigneeId is not null) TrackChange(db, issue, "assignee", issue.AssigneeId?.ToString(), req.AssigneeId.Value.ToString(), actorId);
-            if (req.EpicId is not null) TrackChange(db, issue, "epic", issue.EpicId?.ToString(), req.EpicId.Value.ToString(), actorId);
-            if (req.SprintId is not null) TrackChange(db, issue, "sprint", issue.SprintId?.ToString(), req.SprintId.Value.ToString(), actorId);
-            if (req.ReleaseId is not null) TrackChange(db, issue, "release", issue.ReleaseId?.ToString(), req.ReleaseId.Value.ToString(), actorId);
-            if (req.Estimate is not null) TrackChange(db, issue, "estimate", issue.Estimate?.ToString(), req.Estimate.Value.ToString(), actorId);
+            TrackChange(db, issue, "assignee", issue.AssigneeId?.ToString(), req.AssigneeId?.ToString(), actorId);
+            TrackChange(db, issue, "epic", issue.EpicId?.ToString(), req.EpicId?.ToString(), actorId);
+            TrackChange(db, issue, "sprint", issue.SprintId?.ToString(), req.SprintId?.ToString(), actorId);
+            TrackChange(db, issue, "release", issue.ReleaseId?.ToString(), req.ReleaseId?.ToString(), actorId);
+            TrackChange(db, issue, "estimate", issue.Estimate?.ToString(), req.Estimate?.ToString(), actorId);
 
             if (req.Title != null) issue.Title = req.Title.Trim();
             if (req.Description != null) issue.Description = req.Description;
             if (req.Type != null) issue.Type = ParseEnum(req.Type, issue.Type);
             if (req.Status != null) issue.Status = ParseEnum(req.Status, issue.Status);
             if (req.Priority != null) issue.Priority = ParseEnum(req.Priority, issue.Priority);
-            if (req.AssigneeId.HasValue) issue.AssigneeId = req.AssigneeId.Value;
-            if (req.EpicId.HasValue) issue.EpicId = req.EpicId.Value;
-            if (req.SprintId.HasValue) issue.SprintId = req.SprintId.Value;
-            if (req.ReleaseId.HasValue) issue.ReleaseId = req.ReleaseId.Value;
-            if (req.Estimate.HasValue) issue.Estimate = req.Estimate.Value;
+            issue.AssigneeId = req.AssigneeId;
+            issue.EpicId = req.EpicId;
+            issue.SprintId = req.SprintId;
+            issue.ReleaseId = req.ReleaseId;
+            issue.Estimate = req.Estimate;
             if (req.Position.HasValue) issue.Position = req.Position.Value;
 
             issue.UpdatedAt = DateTime.UtcNow;
@@ -350,7 +364,8 @@ public record CreateIssueRequest(
     Guid? EpicId,
     Guid? SprintId,
     Guid? ReleaseId,
-    int? Estimate);
+    int? Estimate,
+    Guid[]? LabelIds);
 
 public record UpdateIssueRequest(
     string? Title,

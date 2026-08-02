@@ -9,7 +9,7 @@ public static class ReleaseEndpoints
 {
     public static void Map(WebApplication app)
     {
-        var group = app.MapGroup("/projects/{projectKey}/releases").RequireAuthorization();
+        var group = app.MapGroup("/api/projects/{projectKey}/releases").RequireAuthorization();
 
         group.MapGet("/", async (string projectKey, TrazerDbContext db) =>
         {
