@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: trazer
+      POSTGRES_PASSWORD: trazer
+      POSTGRES_DB: trazer
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trazer"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: apps/api
+    environment:
+      ConnectionStrings__Default: "Host=db;Database=trazer;Username=trazer;Password=trazer"
+      Jwt__Key: "dev-only-secret-change-in-production"
+      ASPNETCORE_ENVIRONMENT: Production
+    ports:
+      - "8080:8080"
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: apps/web
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  uploads:

@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+bin/
+obj/
+dist/
+*.user
+
+# Build output
+apps/web/dist/
+apps/api/bin/
+apps/api/obj/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.sln.docstates
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Uploads (runtime data)
+uploads/
+data/
+
+# Logs
+*.log
+npm-debug.log*
