@@ -8,7 +8,6 @@ import { queryKeys } from '../lib/query-keys'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
-import { Separator } from '../components/ui/separator'
 
 export function LoginPage() {
   const { user, loading, login, demoLogin } = useAuth()
@@ -28,10 +27,6 @@ export function LoginPage() {
   if (!loading && user) return <Navigate to="/projects" replace />
 
   const from = (location.state as { from?: string } | null)?.from ?? '/projects'
-
-  const beginOAuth = (provider: string) => {
-    window.location.assign(`/api/auth/oauth/${provider}/begin?redirect=${encodeURIComponent(from)}`)
-  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -117,21 +112,6 @@ export function LoginPage() {
             {pending && <Loader2 className="mr-1 size-4 animate-spin" />}
             Sign in
           </Button>
-
-          <div className="flex items-center gap-3">
-            <Separator className="flex-1" />
-            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">or</span>
-            <Separator className="flex-1" />
-          </div>
-
-          <div className="grid gap-2">
-            <Button type="button" variant="outline" onClick={() => beginOAuth('google')}>
-              Continue with Google
-            </Button>
-            <Button type="button" variant="outline" onClick={() => beginOAuth('github')}>
-              Continue with GitHub
-            </Button>
-          </div>
 
           <p className="mt-4 text-center text-[11px] text-muted-foreground">
             No self-service sign-up — ask an admin to create your account.

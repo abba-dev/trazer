@@ -45,10 +45,6 @@ public record AttachmentDto(Guid Id, string FileName, string ContentType, long S
 
 public record SavedFilterDto(Guid Id, string Name, string Query, DateTime CreatedAt);
 
-public record AllowedDomainDto(Guid Id, string Domain);
-
-public record AllowedEmailDto(Guid Id, string Email);
-
 public record WebhookDto(Guid Id, string Url, string Events, string Secret, DateTime CreatedAt);
 
 public static class Mapping
@@ -75,10 +71,6 @@ public static class Mapping
         new(a.Id, a.FileName, a.ContentType, a.Size, a.UploadedBy!.ToDto(), a.UploadedAt);
 
     public static SavedFilterDto ToDto(this SavedFilter f) => new(f.Id, f.Name, f.Query, f.CreatedAt);
-
-    public static AllowedDomainDto ToDto(this AllowedDomain d) => new(d.Id, d.Domain);
-
-    public static AllowedEmailDto ToDto(this AllowedEmail e) => new(e.Id, e.Email);
 
     public static WebhookDto ToDto(this Webhook w) => new(w.Id, w.Url, w.Events, w.Secret, w.CreatedAt);
 

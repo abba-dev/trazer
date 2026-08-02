@@ -49,7 +49,6 @@ builder.Services.AddDbContext<TrazerDbContext>(options =>
 
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddScoped<CurrentUserService>();
-builder.Services.AddHttpClient<OAuthService>();
 builder.Services.AddSingleton<WebhookService>();
 
 if (builder.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Demo:Enabled"))
@@ -90,7 +89,6 @@ app.MapGet("/api/config", (IConfiguration config) => Results.Ok(new
 }));
 
 AuthEndpoints.Map(app);
-OAuthEndpoints.Map(app);
 ProjectEndpoints.Map(app);
 IssueEndpoints.Map(app);
 SprintEndpoints.Map(app);

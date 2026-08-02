@@ -76,6 +76,20 @@ const user = {
   },
 }
 
+const admin = {
+  create: async (...args) => {
+    const flags = parseFlags(args)
+    if (!flags.email || !flags.password) throw new Error('usage: admin create --email=<email> --password=<password> [--name=<name>]')
+    const r = await api('POST', '/api/auth/admin', {
+      email: flags.email,
+      name: flags.name,
+      password: flags.password,
+    })
+    console.log(`created admin ${r.user.email}`)
+    console.log(`token: ${r.token}`)
+  },
+}
+
 const config = {
   show: async () => {
     const c = await api('GET', '/api/config')
@@ -111,6 +125,8 @@ API (talks to $TRAZER_API, default http://localhost:8080; needs $TRAZER_TOKEN):
   issue comment <key> <body>       add a comment
   user me                          current user
   config show                      public config (demo flag, etc.)
+  admin create --email=<email> --password=<password> [--name=<name>]
+                                  bootstrap the first admin (works only when Users is empty)
 
 Env:
   TRAZER_API    API base URL
@@ -124,7 +140,7 @@ if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   process.exit(0)
 }
 
-const handlers = { issue, user, config }
+const handlers = { issue, user, config, admin }
 if (handlers[cmd]) {
   const fn = handlers[cmd][sub]
   if (!fn) {

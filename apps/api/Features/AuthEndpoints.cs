@@ -39,7 +39,7 @@ public static class AuthEndpoints
         ).RequireAuthorization();
 
         // Admin-only: create a new account. Open self-registration is intentionally removed —
-        // an admin grants every access. ponytail: OAuth whitelisting deferred to V1.
+        // an admin grants every access.
         group.MapPost("/users", async (CreateUserRequest req, TrazerDbContext db, CurrentUserService current) =>
         {
             var actor = await db.Users.FindAsync(current.CurrentUserId)
@@ -125,9 +125,36 @@ public static class AuthEndpoints
                 throw ApiException.BadRequest("Account disabled");
             return Results.Ok(new { token = tokens.CreateToken(user.Id, user.Email), user = user.ToDto() });
         });
+
+        // Bootstrap the first admin on a fresh install. Only works when Users is
+        // empty. Replaces the old OAuth-first-login bootstrap — run via the CLI:
+        //   TRAZER_API=... npx trazer admin create --email=me@x --password=...
+        group.MapPost("/admin", async (CreateAdminRequest req, TrazerDbContext db, TokenService tokens) =>
+        {
+            if (await db.Users.AnyAsync())
+                throw ApiException.Forbidden("Admin bootstrap disabled (users already exist)");
+
+            var email = req.Email.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 8)
+                throw ApiException.BadRequest("Password must be at least 8 characters");
+            if (await db.Users.AnyAsync(u => u.Email == email))
+                throw ApiException.Conflict("An account with this email already exists");
+
+            var user = new User
+            {
+                Email = email,
+                Name = string.IsNullOrWhiteSpace(req.Name) ? email.Split('@')[0] : req.Name.Trim(),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
+                IsAdmin = true,
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+            return Results.Ok(new { token = tokens.CreateToken(user.Id, user.Email), user = user.ToDto() });
+        });
     }
 }
 
 public record LoginRequest(string Email, string Password);
 public record CreateUserRequest(string Email, string Name, string Password, bool IsAdmin = false);
 public record UpdateUserRequest(bool? Disabled, string? Password);
+public record CreateAdminRequest(string Email, string Name, string Password);

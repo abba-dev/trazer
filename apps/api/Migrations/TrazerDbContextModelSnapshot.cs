@@ -22,50 +22,6 @@ namespace Trazer.Api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Trazer.Api.Domain.AllowedDomain", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Domain")
-                        .IsRequired()
-                        .HasMaxLength(253)
-                        .HasColumnType("character varying(253)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Domain")
-                        .IsUnique();
-
-                    b.ToTable("AllowedDomains");
-                });
-
-            modelBuilder.Entity("Trazer.Api.Domain.AllowedEmail", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(320)
-                        .HasColumnType("character varying(320)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Email")
-                        .IsUnique();
-
-                    b.ToTable("AllowedEmails");
-                });
-
             modelBuilder.Entity("Trazer.Api.Domain.Attachment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -530,43 +486,6 @@ namespace Trazer.Api.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("Trazer.Api.Domain.UserIdentity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(320)
-                        .HasColumnType("character varying(320)");
-
-                    b.Property<string>("ExternalId")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("Provider", "ExternalId")
-                        .IsUnique();
-
-                    b.ToTable("UserIdentities");
-                });
-
             modelBuilder.Entity("Trazer.Api.Domain.Webhook", b =>
                 {
                     b.Property<Guid>("Id")
@@ -805,17 +724,6 @@ namespace Trazer.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("Trazer.Api.Domain.UserIdentity", b =>
-                {
-                    b.HasOne("Trazer.Api.Domain.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Trazer.Api.Domain.Webhook", b =>

@@ -16,14 +16,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const oauthToken = params.get('token')
-    if (oauthToken) {
-      setToken(oauthToken)
-      params.delete('token')
-      const next = params.toString()
-      window.history.replaceState(null, '', window.location.pathname + (next ? `?${next}` : ''))
-    }
     if (!localStorage.getItem('trazer-token')) {
       setLoading(false)
       return

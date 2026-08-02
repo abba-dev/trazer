@@ -21,14 +21,6 @@ services:
     environment:
       ConnectionStrings__Default: "Host=db;Database=trazer;Username=trazer;Password=trazer"
       Jwt__Key: "dev-only-secret-change-in-production"
-      # OAuth is opt-in: uncomment to enable a provider (empty ClientId => 503 "OAuth disabled").
-      # RedirectUri must match exactly what you register in the provider console.
-      # Google__ClientId: ""
-      # Google__ClientSecret: ""
-      # Google__RedirectUri: "https://trazer.example.com/api/auth/oauth/google/callback"
-      # GitHub__ClientId: ""
-      # GitHub__ClientSecret: ""
-      # GitHub__RedirectUri: "https://trazer.example.com/api/auth/oauth/github/callback"
       ASPNETCORE_URLS: "http://+:8080"
       ASPNETCORE_ENVIRONMENT: Production
     ports:

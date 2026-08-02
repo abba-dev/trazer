@@ -74,8 +74,7 @@ Both run the API on `:8080`.
 docker compose up -d
 ```
 
-Web on `:3000`. OAuth providers are opt-in via the commented
-`Google__*` / `GitHub__*` in `docker-compose.yml`.
+Web on `:3000`.
 
 ### Native (bare metal / VPS)
 
