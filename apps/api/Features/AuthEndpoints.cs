@@ -12,26 +12,6 @@ public static class AuthEndpoints
     {
         var group = app.MapGroup("/api/auth");
 
-        group.MapPost("/register", async (RegisterRequest req, TrazerDbContext db) =>
-        {
-            var email = req.Email.Trim().ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 8)
-                throw ApiException.BadRequest("Password must be at least 8 characters");
-
-            if (await db.Users.AnyAsync(u => u.Email == email))
-                throw ApiException.Conflict("An account with this email already exists");
-
-            var user = new User
-            {
-                Email = email,
-                Name = req.Name.Trim(),
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password)
-            };
-            db.Users.Add(user);
-            await db.SaveChangesAsync();
-            return Results.Created($"/auth/me", new { user = user.ToDto() });
-        });
-
         group.MapPost("/login", async (LoginRequest req, TrazerDbContext db, TokenService tokens) =>
         {
             var email = req.Email.Trim().ToLowerInvariant();
@@ -54,9 +34,35 @@ public static class AuthEndpoints
         group.MapGet("/users", async (TrazerDbContext db) =>
             Results.Ok(await db.Users.OrderBy(u => u.Name).Select(u => u.ToDto()).ToListAsync())
         ).RequireAuthorization();
+
+        // Admin-only: create a new account. Open self-registration is intentionally removed —
+        // an admin grants every access. ponytail: OAuth whitelisting deferred to V1.
+        group.MapPost("/users", async (CreateUserRequest req, TrazerDbContext db, CurrentUserService current) =>
+        {
+            var actor = await db.Users.FindAsync(current.CurrentUserId)
+                ?? throw ApiException.Unauthorized();
+            if (!actor.IsAdmin)
+                throw ApiException.Forbidden("Only admins can create accounts");
+
+            var email = req.Email.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 8)
+                throw ApiException.BadRequest("Password must be at least 8 characters");
+            if (await db.Users.AnyAsync(u => u.Email == email))
+                throw ApiException.Conflict("An account with this email already exists");
+
+            var user = new User
+            {
+                Email = email,
+                Name = req.Name.Trim(),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
+                IsAdmin = req.IsAdmin
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+            return Results.Created($"/auth/me", user.ToDto());
+        }).RequireAuthorization();
     }
 }
 
-public record RegisterRequest(string Email, string Name, string Password);
-
 public record LoginRequest(string Email, string Password);
+public record CreateUserRequest(string Email, string Name, string Password, bool IsAdmin = false);

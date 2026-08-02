@@ -15,7 +15,8 @@ public static class DbSeeder
         {
             Email = "demo@trazer.dev",
             Name = "Demo User",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password123")
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password123"),
+            IsAdmin = true
         };
         db.Users.Add(user);
 

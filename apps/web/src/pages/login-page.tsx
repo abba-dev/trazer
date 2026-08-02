@@ -5,14 +5,11 @@ import { useAuth } from '../lib/auth'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
-import { cn } from '../lib/utils'
 
 export function LoginPage() {
-  const { user, loading, login, register } = useAuth()
+  const { user, loading, login } = useAuth()
   const navigate = useNavigate()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
-  const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -24,8 +21,7 @@ export function LoginPage() {
     setError(null)
     setPending(true)
     try {
-      if (mode === 'login') await login(email, password)
-      else await register(email, name, password)
+      await login(email, password)
       navigate('/projects', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -58,26 +54,13 @@ export function LoginPage() {
               placeholder="you@example.com"
             />
           </div>
-          {mode === 'register' && (
-            <div className="grid gap-1.5">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                required
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Jane Doe"
-              />
-            </div>
-          )}
           <div className="grid gap-1.5">
             <Label htmlFor="password">Password</Label>
             <Input
               id="password"
               type="password"
               required
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -88,23 +71,17 @@ export function LoginPage() {
 
           <Button type="submit" disabled={pending || loading}>
             {pending && <Loader2 className="mr-1 size-4 animate-spin" />}
-            {mode === 'login' ? 'Sign in' : 'Create account'}
+            Sign in
           </Button>
 
-          <button
-            type="button"
-            onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-            className={cn('text-xs text-muted-foreground hover:text-foreground')}
-          >
-            {mode === 'login' ? "Don't have an account? Register" : 'Already have an account? Sign in'}
-          </button>
+          <p className="mt-4 text-center text-[11px] text-muted-foreground">
+            No self-service sign-up — ask an admin to create your account.
+          </p>
         </form>
 
-        {mode === 'login' && (
-          <p className="mt-4 text-center text-[11px] text-muted-foreground">
-            Demo: demo@trazer.dev / password123
-          </p>
-        )}
+        <p className="mt-4 text-center text-[11px] text-muted-foreground">
+          Demo: demo@trazer.dev / password123
+        </p>
       </div>
     </div>
   )

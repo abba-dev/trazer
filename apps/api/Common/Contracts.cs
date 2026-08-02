@@ -2,7 +2,7 @@ using Trazer.Api.Domain;
 
 namespace Trazer.Api.Common;
 
-public record UserDto(Guid Id, string Email, string Name);
+public record UserDto(Guid Id, string Email, string Name, bool IsAdmin);
 
 public record ProjectDto(Guid Id, string Key, string Name, string? Description, int IssueCount, DateTime CreatedAt);
 
@@ -47,7 +47,7 @@ public record SavedFilterDto(Guid Id, string Name, string Query, DateTime Create
 
 public static class Mapping
 {
-    public static UserDto ToDto(this User u) => new(u.Id, u.Email, u.Name);
+    public static UserDto ToDto(this User u) => new(u.Id, u.Email, u.Name, u.IsAdmin);
 
     public static LabelDto ToDto(this Label l) => new(l.Id, l.Name, l.Color);
 
@@ -82,7 +82,7 @@ public static class Mapping
             i.Priority.ToString(),
             i.AssigneeId,
             i.Assignee?.ToDto(),
-            i.Reporter?.ToDto() ?? new UserDto(Guid.Empty, string.Empty, string.Empty),
+            i.Reporter?.ToDto() ?? new UserDto(Guid.Empty, string.Empty, string.Empty, false),
             i.EpicId,
             i.Epic?.Name,
             i.SprintId,

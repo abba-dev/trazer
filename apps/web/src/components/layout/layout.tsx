@@ -33,6 +33,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu'
 import { Button } from '../ui/button'
 import { CreateIssueDialog } from '../issues/create-issue-dialog'
+import { CreateUserDialog } from '../auth/create-user-dialog'
 import { ShortcutsDialog } from './shortcuts-dialog'
 
 export function Layout() {
@@ -43,6 +44,7 @@ export function Layout() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [userCreateOpen, setUserCreateOpen] = useState(false)
   const queryClient = useQueryClient()
 
   const { data: projects } = useQuery({ queryKey: queryKeys.projects, queryFn: projectApi.list })
@@ -108,7 +110,7 @@ export function Layout() {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
-      <Sidebar projects={projects ?? []} filters={filters ?? []} activeKey={projectKey} user={user} onLogout={logout} theme={theme} onTheme={setTheme} />
+      <Sidebar projects={projects ?? []} filters={filters ?? []} activeKey={projectKey} user={user} isAdmin={!!user?.isAdmin} onCreateUser={() => setUserCreateOpen(true)} onLogout={logout} theme={theme} onTheme={setTheme} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
           project={projectKey ? projects?.find((p) => p.key === projectKey) : undefined}
@@ -131,6 +133,8 @@ export function Layout() {
           if (!open) invalidateProject()
         }}
       />
+
+      <CreateUserDialog open={userCreateOpen} onOpenChange={setUserCreateOpen} />
     </div>
   )
 }
@@ -140,6 +144,8 @@ function Sidebar({
   filters,
   activeKey,
   user,
+  isAdmin,
+  onCreateUser,
   onLogout,
   theme,
   onTheme,
@@ -147,7 +153,9 @@ function Sidebar({
   projects: Project[]
   filters: SavedFilter[]
   activeKey?: string
-  user: { name: string; email: string } | null
+  user: { name: string; email: string; isAdmin?: boolean } | null
+  isAdmin: boolean
+  onCreateUser: () => void
   onLogout: () => void
   theme: string
   onTheme: (t: 'light' | 'dark' | 'system') => void
@@ -233,6 +241,11 @@ function Sidebar({
                 <ExternalLink className="size-4" /> GitHub
               </a>
             </DropdownMenuItem>
+            {isAdmin && (
+              <DropdownMenuItem onClick={onCreateUser}>
+                <Plus className="size-4" /> Create user
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onLogout} className="text-destructive focus:text-destructive">
               Sign out
