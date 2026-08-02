@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "trazer": "./scripts/trazer.mjs"
+  },
   "scripts": {
     "test": "npm run test:api && npm run test:web",
     "test:api": "dotnet test apps/api.Tests --nologo",

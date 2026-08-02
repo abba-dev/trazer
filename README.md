@@ -178,6 +178,24 @@ npm run build    # dotnet publish + tsc + vite build
 npm run clean    # removes apps/*/bin, apps/*/obj, apps/web/dist, apps/web/node_modules
 ```
 
+## Trazer CLI
+
+The root `package.json` also exposes a `trazer` command (via the `bin`
+field) that wraps the same scripts:
+
+```sh
+npx trazer           # help
+npx trazer build     # = npm run build
+npx trazer test:api  # = npm run test:api
+npx trazer clean     # = npm run clean
+npx trazer clean:git # = npm run clean:git
+```
+
+`npx` works without installing. To put `trazer` on your `PATH`, run
+`npm link` (or `npm install -g .`) from the repo root. Long-running
+commands (`trazer dev:api`, `trazer dev:web`) belong in a sub-agent per
+[AGENTS.md](AGENTS.md).
+
 ## FAQ
 
 **Why another issue tracker?**
