@@ -69,12 +69,6 @@ docker compose up -d
 - Web: http://localhost:3000
 - API: http://localhost:8080
 
-The dev seed ships a user (`demo@trazer.dev` / `password123`), a
-project, 12 issues, 4 labels, 3 epics, 2 sprints and a release. The
-demo flag stays off in the self-hosted build; turn it on with
-`Demo__Enabled=true` when you want the hosted demo to log visitors in
-with one click.
-
 ## Deploy
 
 Two paths. The Docker one is the easy one. The native one is for the
