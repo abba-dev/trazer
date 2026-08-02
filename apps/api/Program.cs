@@ -1,8 +1,11 @@
+using Microsoft.EntityFrameworkCore;
 using Trazer.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<TrazerDbContext>();
+builder.Services.AddDbContext<TrazerDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("dev", policy =>
