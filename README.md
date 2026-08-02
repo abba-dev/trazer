@@ -1,6 +1,4 @@
-# Trazer
-
-**Track less. Build more.**
+![Trazer](https://github.com/abba-dev/trazer/blob/main/moodboard/trzrlogo.png )
 
 Fast issue tracking focused on speed, simplicity and developer productivity.
 
