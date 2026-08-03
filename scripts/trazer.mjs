@@ -17,11 +17,12 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const API = process.env.TRAZER_API ?? 'http://localhost:8080'
 const TOKEN = process.env.TRAZER_TOKEN ?? null
 
-async function api(method, path, body) {
+async function api(method, path, body, fetchImpl = fetch) {
   const headers = { 'Content-Type': 'application/json' }
   if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetchImpl(`${API}${path}`, {
     method, headers, body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(5000),
   })
   if (!res.ok) {
     let msg = await res.text()
