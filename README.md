@@ -34,6 +34,20 @@ One instance, one team, no per-seat license.
 Prereqs: Node 20+, .NET 10 SDK, Postgres 15+ on `localhost:5432` with
 a `trazer` user and db.
 
+Install:
+- **Windows**: `winget install Microsoft.NodeJS Microsoft.DotNet.SDK.10 PostgreSQL.PostgreSQL.16`
+- **macOS**: `brew install node postgresql@16 && brew install --cask dotnet-sdk`
+- **Linux**: `sudo apt install -y nodejs postgresql` (.NET 10 from
+  [Microsoft docs](https://learn.microsoft.com/dotnet/core/install/linux))
+
+Then create the role + db (one-time):
+- **macOS / Linux**: `sudo -u postgres createuser trazer && sudo -u postgres createdb -O trazer trazer`
+- **Windows** (psql as postgres user):
+  ```sql
+  CREATE USER trazer WITH PASSWORD 'trazer';
+  CREATE DATABASE trazer OWNER trazer;
+  ```
+
 1. **Clone** the repo:
    ```sh
    git clone https://github.com/abba-dev/trazer.git && cd trazer
@@ -126,6 +140,18 @@ Set `TRAZER_TOKEN` (a JWT or API token) and `TRAZER_API` (default
 `http://localhost:8080`). Run `npx trazer` for the full help. Long-
 running commands (`dev:*`) belong in a sub-agent per
 [AGENTS.md](AGENTS.md).
+
+## Updating
+
+`git pull` and restart:
+- **Native**: `node scripts/trazer.mjs dev stop && node scripts/trazer.mjs dev`
+- **Docker**: `docker compose pull && docker compose up -d`
+
+## Before going to production
+
+The dev defaults work for local. For a real server, set `Jwt__Key` to
+a 32+ char random string (`openssl rand -base64 48`) — otherwise anyone
+can forge tokens.
 
 ## Why
 

@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import { platform } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
+import net from 'node:net'
 import path from 'node:path'
 
 const execAsync = promisify(exec)
@@ -83,6 +84,19 @@ async function prompt(question, defaultValue) {
   })
 }
 
+// ponytail: pure-Node TCP probe to localhost:5432 — no deps, no psql
+// needed. If Postgres is listening, return true; else false.
+async function checkPostgres() {
+  return new Promise((resolve) => {
+    const sock = new net.Socket()
+    sock.setTimeout(2000)
+    sock.once('connect', () => { sock.destroy(); resolve(true) })
+    sock.once('timeout', () => { sock.destroy(); resolve(false) })
+    sock.once('error', () => resolve(false))
+    sock.connect(5432, 'localhost')
+  })
+}
+
 const dev = {
   native: async () => {
     const apiPort = process.env.TRAZER_API_PORT || await prompt('API port', '8080')
@@ -103,7 +117,13 @@ const dev = {
       console.log('apps/web/node_modules missing — running npm install...')
       await execAsync('npm install', { cwd: path.join(REPO, 'apps/web') })
     }
-    console.log('starting dev stack (native, assumes Postgres running on :5432)...')
+    if (!await checkPostgres()) {
+      console.error('Postgres not reachable on localhost:5432. Install it, start it, then:')
+      console.error('  macOS/Linux: sudo -u postgres createuser trazer && sudo -u postgres createdb -O trazer trazer')
+      console.error('  Windows (psql as postgres user): CREATE USER trazer WITH PASSWORD \'trazer\'; CREATE DATABASE trazer OWNER trazer;')
+      process.exit(1)
+    }
+    console.log('starting dev stack (native, Postgres on :5432 assumed)...')
     await killTaskboardProcesses()
     const api = spawn('dotnet', ['run', '--project', 'apps/api', '--no-launch-profile'], {
       cwd: REPO, env, detached: true, stdio: 'ignore', windowsHide: true,
@@ -122,6 +142,7 @@ const dev = {
       console.log(`  web:  http://localhost:${webPort}`)
       console.log('  login: demo@trazer.dev / password123')
       console.log('  stop: trazer dev stop')
+      console.log('  logs: %TEMP%/trazer-api.log, %TEMP%/trazer-web.log')
     } else {
       console.error('dev stack failed to come up')
       console.error(`  api: ${apiOk ? 'up' : 'down'}`)
@@ -207,6 +228,17 @@ const user = {
     const r = await api('POST', '/api/auth/users', body)
     console.log(`created user ${r.email}${r.isAdmin ? ' (admin)' : ''}`)
   },
+  resetPassword: async (...args) => {
+    const flags = parseFlags(args)
+    if (!flags.email || !flags.password) {
+      throw new Error('usage: user reset-password --email=<email> --password=<newpassword>')
+    }
+    const users = await api('GET', '/api/auth/users')
+    const u = users.find(x => x.email === flags.email)
+    if (!u) throw new Error(`user not found: ${flags.email}`)
+    await api('PATCH', `/api/auth/users/${u.id}`, { password: flags.password })
+    console.log(`reset password for ${flags.email}`)
+  },
 }
 
 const config = {
@@ -265,6 +297,8 @@ API (talks to $TRAZER_API, default http://localhost:8080; needs $TRAZER_TOKEN):
   user me                          current user
   user create --email=<email> --name=<name> --password=<password> [--admin]
                                   create a new user (requires admin token)
+  user reset-password --email=<email> --password=<newpassword>
+                                  reset a user's password (requires admin token)
   config show                      public config (demo flag, etc.)
   admin create --email=<email> --password=<password> [--name=<name>]
                                   bootstrap the first admin (works only when Users is empty)
