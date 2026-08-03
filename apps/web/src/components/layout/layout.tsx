@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Boxes,
@@ -155,6 +155,7 @@ function Sidebar({
   onLogout: () => void
 }) {
   const queryClient = useQueryClient()
+  const location = useLocation()
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r bg-sidebar">
       <div className="flex h-14 items-center gap-2 border-b px-4">
@@ -164,8 +165,8 @@ function Sidebar({
 
       <div className="flex-1 overflow-y-auto px-3 py-4">
         <SidebarSection label="Workspace">
-          <SidebarLink to="/projects" icon={Boxes} label="Projects" active />
-          <SidebarLink to="/search" icon={Search} label="Search" />
+          <SidebarLink to="/projects" icon={Boxes} label="Projects" active={location.pathname === '/projects'} end={false} />
+          <SidebarLink to="/search" icon={Search} label="Search" active={location.pathname === '/search'} />
           {isAdmin && <SidebarLink to="/admin/users" icon={Users} label="Users" end={false} />}
         </SidebarSection>
         {filters.length > 0 && (

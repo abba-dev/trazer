@@ -4,6 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  color-scheme: dark;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI Variable', 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -12,9 +13,6 @@
   font-feature-settings: 'cv11', 'ss01';
   letter-spacing: -0.011em;
   --radius: 0.625rem;
-}
-
-.dark {
   --background: oklch(0.155 0.012 256);
   --foreground: oklch(0.97 0.002 248);
   --card: oklch(0.205 0.014 256);
@@ -30,8 +28,8 @@
   --accent: oklch(0.30 0.018 256);
   --accent-foreground: oklch(0.97 0.002 248);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.97 0.002 248 / 10%);
-  --input: oklch(0.97 0.002 248 / 12%);
+  --border: oklch(0.97 0.002 248 / 12%);
+  --input: oklch(0.97 0.002 248 / 14%);
   --ring: oklch(0.546 0.183 258.5);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -44,7 +42,7 @@
   --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-accent: oklch(0.30 0.018 256);
   --sidebar-accent-foreground: oklch(0.97 0.002 248);
-  --sidebar-border: oklch(0.97 0.002 248 / 10%);
+  --sidebar-border: oklch(0.97 0.002 248 / 12%);
   --sidebar-ring: oklch(0.546 0.183 258.5);
   /* Soft shadow tokens — used for floating elements (popovers, dialogs, dropdowns) */
   --shadow-popover: 0 4px 16px -2px oklch(0 0 0 / 0.4), 0 2px 4px -1px oklch(0 0 0 / 0.3);
@@ -93,6 +91,8 @@
 
 body {
   margin: 0;
+  color: var(--foreground);
+  background: var(--background);
 }
 
 * {

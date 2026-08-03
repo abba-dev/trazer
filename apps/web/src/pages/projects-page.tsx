@@ -36,12 +36,13 @@ export function ProjectsPage() {
 
   if (isPending) {
     return (
-      <div className="mx-auto max-w-5xl px-6 py-6">
+      <div className="mx-auto w-full max-w-7xl px-6 py-6">
         <div className="mb-6 flex items-center justify-between">
           <Skeleton className="h-6 w-32" />
           <Skeleton className="h-8 w-32" />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <Skeleton className="h-32" />
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
@@ -51,7 +52,7 @@ export function ProjectsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-6">
+    <div className="mx-auto w-full max-w-7xl px-6 py-6">
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Projects</h2>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -70,7 +71,7 @@ export function ProjectsPage() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {projects?.map((project) => (
           <ProjectCard key={project.id} project={project} />
         ))}
