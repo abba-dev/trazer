@@ -86,9 +86,11 @@ async function prompt(question, defaultValue) {
 }
 
 // ponytail: pure-Node TCP probe to localhost:5432 — no deps, no psql
-// needed. If Postgres is listening, return true; else false.
+// needed for the first check. If Postgres is listening, also try a
+// psql connection to the trazer user/db so we catch "Postgres is up
+// but the user/db is missing" before the API dies on first migration.
 async function checkPostgres() {
-  return new Promise((resolve) => {
+  const tcpOk = await new Promise((resolve) => {
     const sock = new net.Socket()
     sock.setTimeout(2000)
     sock.once('connect', () => { sock.destroy(); resolve(true) })
@@ -96,6 +98,16 @@ async function checkPostgres() {
     sock.once('error', () => resolve(false))
     sock.connect(5432, 'localhost')
   })
+  if (!tcpOk) return { ok: false, reason: 'not listening' }
+  const psqlOk = await new Promise((resolve) => {
+    const proc = spawn('psql', ['-h', 'localhost', '-U', 'trazer', '-d', 'trazer', '-c', 'SELECT 1'], {
+      stdio: 'pipe', shell: isWindows,
+    })
+    proc.once('exit', (code) => resolve(code === 0))
+    proc.once('error', () => resolve(false))
+  })
+  if (!psqlOk) return { ok: false, reason: 'no user/db' }
+  return { ok: true }
 }
 
 const dev = {
@@ -118,8 +130,13 @@ const dev = {
       console.log('apps/web/node_modules missing — running npm install...')
       await execAsync('npm install', { cwd: path.join(REPO, 'apps/web') })
     }
-    if (!await checkPostgres()) {
-      console.error('Postgres not reachable on localhost:5432. Install it, start it, then:')
+    const pg = await checkPostgres()
+    if (!pg.ok) {
+      if (pg.reason === 'not listening') {
+        console.error('Postgres not reachable on localhost:5432. Install it, start it, then:')
+      } else {
+        console.error('Postgres is up but the trazer user/db is missing or inaccessible. Create them:')
+      }
       console.error('  macOS/Linux: sudo -u postgres createuser trazer && sudo -u postgres createdb -O trazer trazer')
       console.error('  Windows (psql as postgres user): CREATE USER trazer WITH PASSWORD \'trazer\'; CREATE DATABASE trazer OWNER trazer;')
       process.exit(1)
