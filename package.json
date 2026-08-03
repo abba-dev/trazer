@@ -13,6 +13,7 @@
     "build": "npm run build:api && npm run build:web",
     "build:api": "dotnet publish apps/api -c Release -o ./artifacts/api",
     "build:web": "npm --prefix apps/web run build",
+    "test:cli": "node --test scripts/trazer.test.mjs",
     "clean": "node scripts/clean.mjs",
     "clean:git": "git reflog expire --expire=now --all && git gc --prune=now --aggressive"
   }

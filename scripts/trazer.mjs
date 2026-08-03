@@ -344,22 +344,30 @@ Env:
   TRAZER_TOKEN  JWT or API token (Bearer auth)
 `
 
-const [, , cmd, sub, ...rest] = process.argv
+// ponytail: export the testable internals so scripts/trazer.test.mjs can
+// unit-test them without going through the CLI subprocess.
+export { parseFlags, api, runNpm, waitFor, killTaskboardProcesses, prompt, checkPostgres }
 
-if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
-  console.log(help)
-  process.exit(0)
-}
+// Run the CLI dispatcher only when this file is invoked directly — not
+// when it's imported by the test runner (or anything else).
+if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
+  const [, , cmd, sub, ...rest] = process.argv
 
-const handlers = { issue, user, config, admin, dev }
-if (handlers[cmd]) {
-  // 'dev' defaults to 'native' when no subcommand given
-  const fn = (cmd === 'dev' && !sub) ? handlers.dev.native : handlers[cmd][sub]
-  if (!fn) {
-    console.error(`unknown ${cmd} subcommand: ${sub ?? '(none)'}`)
-    process.exit(1)
+  if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
+    console.log(help)
+    process.exit(0)
   }
-  fn(...rest).catch((err) => { console.error(err.message); process.exit(1) })
-} else {
-  runNpm(cmd, [sub, ...rest]).catch((err) => { console.error(err.message); process.exit(1) })
+
+  const handlers = { issue, user, config, admin, dev }
+  if (handlers[cmd]) {
+    // 'dev' defaults to 'native' when no subcommand given
+    const fn = (cmd === 'dev' && !sub) ? handlers.dev.native : handlers[cmd][sub]
+    if (!fn) {
+      console.error(`unknown ${cmd} subcommand: ${sub ?? '(none)'}`)
+      process.exit(1)
+    }
+    fn(...rest).catch((err) => { console.error(err.message); process.exit(1) })
+  } else {
+    runNpm(cmd, [sub, ...rest]).catch((err) => { console.error(err.message); process.exit(1) })
+  }
 }
