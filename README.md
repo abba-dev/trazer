@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/abba-dev/trazer/main/img/trzrlogo.png" width="400" alt="Trazer">
+  <img src="https://raw.githubusercontent.com/abba-dev/trazer/main/img/trzrtext.png" width="400" alt="Trazer">
 </p>
 
 <p align="center">

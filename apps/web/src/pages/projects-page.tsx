@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { Input } from '../components/ui/input'
 import { Textarea } from '../components/ui/textarea'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu'
+import { Skeleton } from '../components/ui/skeleton'
 import { formatDate } from '../lib/api'
 
 export function ProjectsPage() {
@@ -33,7 +34,21 @@ export function ProjectsPage() {
     },
   })
 
-  if (isPending) return <div className="p-8 text-sm text-muted-foreground">Loading projects…</div>
+  if (isPending) {
+    return (
+      <div className="mx-auto max-w-5xl px-6 py-6">
+        <div className="mb-6 flex items-center justify-between">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-8 w-32" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-6">

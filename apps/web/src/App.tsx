@@ -2,7 +2,6 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
-import { ThemeProvider } from './lib/theme'
 import { Layout } from './components/layout/layout'
 import { LoginPage } from './pages/login-page'
 import { ProjectsPage } from './pages/projects-page'
@@ -48,30 +47,28 @@ function ScrollToTop() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <BrowserRouter>
-            <ScrollToTop />
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route element={<RequireAuth />}>
-                <Route element={<Layout />}>
-                  <Route path="/" element={<Navigate to="/projects" replace />} />
-                  <Route path="/projects" element={<ProjectsPage />} />
-                  <Route path="/search" element={<SearchPage />} />
-                  <Route path="/admin/users" element={<AdminUsersPage />} />
-                  <Route path="/projects/:projectKey/board" element={<BoardPage />} />
-                  <Route path="/projects/:projectKey/backlog" element={<BacklogPage />} />
-                  <Route path="/projects/:projectKey/sprints" element={<SprintsPage />} />
-                  <Route path="/projects/:projectKey/releases" element={<ReleasesPage />} />
-                </Route>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <BrowserRouter>
+          <ScrollToTop />
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route element={<RequireAuth />}>
+              <Route element={<Layout />}>
+                <Route path="/" element={<Navigate to="/projects" replace />} />
+                <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/admin/users" element={<AdminUsersPage />} />
+                <Route path="/projects/:projectKey/board" element={<BoardPage />} />
+                <Route path="/projects/:projectKey/backlog" element={<BacklogPage />} />
+                <Route path="/projects/:projectKey/sprints" element={<SprintsPage />} />
+                <Route path="/projects/:projectKey/releases" element={<ReleasesPage />} />
               </Route>
-              <Route path="*" element={<Navigate to="/projects" replace />} />
-            </Routes>
-          </BrowserRouter>
-        </AuthProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
+            </Route>
+            <Route path="*" element={<Navigate to="/projects" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </QueryClientProvider>
   )
 }

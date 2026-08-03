@@ -7,20 +7,16 @@ import {
   ExternalLink,
   LayoutGrid,
   ListTodo,
-  Moon,
   Package,
   Plus,
   Search,
-  Sun,
   Users,
   X,
-  Zap,
   type LucideIcon,
 } from 'lucide-react'
 import { issueApi, projectApi, filterApi, authApi, type Issue, type Project, type SavedFilter } from '../../lib/api'
 import { queryKeys } from '../../lib/query-keys'
 import { useAuth } from '../../lib/auth'
-import { useTheme } from '../../lib/theme'
 import { Avatar } from '../issues/meta'
 import { cn } from '../../lib/utils'
 import {
@@ -40,7 +36,6 @@ import { ShortcutsDialog } from './shortcuts-dialog'
 export function Layout() {
   const { projectKey } = useParams<{ projectKey: string }>()
   const { user, logout } = useAuth()
-  const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -112,7 +107,7 @@ export function Layout() {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
-      <Sidebar projects={projects ?? []} filters={filters ?? []} activeKey={projectKey} user={user} isAdmin={!!user?.isAdmin} onCreateUser={() => setUserCreateOpen(true)} onLogout={logout} theme={theme} onTheme={setTheme} />
+      <Sidebar projects={projects ?? []} filters={filters ?? []} activeKey={projectKey} user={user} isAdmin={!!user?.isAdmin} onCreateUser={() => setUserCreateOpen(true)} onLogout={logout} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
           project={projectKey ? projects?.find((p) => p.key === projectKey) : undefined}
@@ -150,8 +145,6 @@ function Sidebar({
   isAdmin,
   onCreateUser,
   onLogout,
-  theme,
-  onTheme,
 }: {
   projects: Project[]
   filters: SavedFilter[]
@@ -160,17 +153,13 @@ function Sidebar({
   isAdmin: boolean
   onCreateUser: () => void
   onLogout: () => void
-  theme: string
-  onTheme: (t: 'light' | 'dark' | 'system') => void
 }) {
   const queryClient = useQueryClient()
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r bg-sidebar">
       <div className="flex h-14 items-center gap-2 border-b px-4">
-        <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <Zap className="size-4" />
-        </span>
-        <span className="text-sm font-semibold tracking-tight">Trazer</span>
+        <img src="/icon.png" alt="Trazer" className="size-7" />
+        <img src="/trzrtext.png" alt="" className="h-5" />
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4">
@@ -236,10 +225,6 @@ function Sidebar({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuItem onClick={() => onTheme(theme === 'dark' ? 'light' : 'dark')}>
-              {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-              {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <a href="https://github.com/abba-dev/trazer" target="_blank" rel="noreferrer">
                 <ExternalLink className="size-4" /> GitHub
