@@ -1,3 +1,7 @@
+# Disabled — single-maintainer repo, no external contributors, tests are
+# run locally before push. Kept here so it's trivial to turn back on:
+# remove the `if: false` line on the `test` job. To disable via the UI
+# instead, go to GitHub → Actions → CI → "..." → "Disable workflow".
 name: CI
 
 on:
@@ -7,6 +11,7 @@ on:
 
 jobs:
   test:
+    if: false
     runs-on: ubuntu-latest
 
     steps:
