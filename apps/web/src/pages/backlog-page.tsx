@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Columns3, Loader2, Settings2 } from 'lucide-react'
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
+import { useSortable, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { Columns3, GripVertical, Loader2 } from 'lucide-react'
 import { issueApi, searchApi, timeAgo, type Issue } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
 import { useListNav } from '../lib/use-list-nav'
@@ -14,23 +17,58 @@ import { cn } from '../lib/utils'
 
 type ColKey = 'key' | 'title' | 'type' | 'status' | 'priority' | 'assignee' | 'estimate' | 'sprint' | 'epic' | 'labels' | 'created' | 'updated'
 
-const ALL_COLUMNS: { key: ColKey; label: string; width: string }[] = [
-  { key: 'key', label: 'Key', width: 'w-[90px]' },
-  { key: 'title', label: 'Title', width: 'flex-1 min-w-0' },
-  { key: 'type', label: 'Type', width: 'w-[80px]' },
-  { key: 'status', label: 'Status', width: 'w-[110px]' },
-  { key: 'priority', label: 'Pri', width: 'w-[40px]' },
-  { key: 'assignee', label: 'Assignee', width: 'w-[44px]' },
-  { key: 'estimate', label: 'Est', width: 'w-[44px]' },
-  { key: 'sprint', label: 'Sprint', width: 'w-[120px]' },
-  { key: 'epic', label: 'Epic', width: 'w-[120px]' },
-  { key: 'labels', label: 'Labels', width: 'w-[140px]' },
-  { key: 'created', label: 'Created', width: 'w-[90px]' },
-  { key: 'updated', label: 'Updated', width: 'w-[90px]' },
+type ColDef = { key: ColKey; label: string; minWidth: number; defaultWidth: number }
+
+const ALL_COLUMNS: ColDef[] = [
+  { key: 'key', label: 'Key', minWidth: 70, defaultWidth: 90 },
+  { key: 'title', label: 'Title', minWidth: 200, defaultWidth: 0 },
+  { key: 'type', label: 'Type', minWidth: 70, defaultWidth: 80 },
+  { key: 'status', label: 'Status', minWidth: 90, defaultWidth: 110 },
+  { key: 'priority', label: 'Pri', minWidth: 32, defaultWidth: 40 },
+  { key: 'assignee', label: 'Assignee', minWidth: 36, defaultWidth: 44 },
+  { key: 'estimate', label: 'Est', minWidth: 36, defaultWidth: 44 },
+  { key: 'sprint', label: 'Sprint', minWidth: 80, defaultWidth: 120 },
+  { key: 'epic', label: 'Epic', minWidth: 80, defaultWidth: 120 },
+  { key: 'labels', label: 'Labels', minWidth: 80, defaultWidth: 140 },
+  { key: 'created', label: 'Created', minWidth: 70, defaultWidth: 90 },
+  { key: 'updated', label: 'Updated', minWidth: 70, defaultWidth: 90 },
 ]
 
-const DEFAULT_VISIBLE: ColKey[] = ['key', 'title', 'type', 'status', 'priority', 'assignee', 'estimate', 'sprint', 'labels', 'updated']
-const STORAGE_KEY = 'trazer.issuelist.columns'
+const DEFAULT_ORDER: ColKey[] = ['key', 'title', 'type', 'status', 'priority', 'assignee', 'estimate', 'sprint', 'labels', 'updated']
+const DEFAULT_WIDTHS: Record<ColKey, number> = Object.fromEntries(ALL_COLUMNS.map((c) => [c.key, c.defaultWidth])) as Record<ColKey, number>
+
+const ORDER_KEY = 'trazer.issuelist.order'
+const WIDTHS_KEY = 'trazer.issuelist.widths'
+
+function loadOrder(): ColKey[] {
+  try {
+    const raw = localStorage.getItem(ORDER_KEY)
+    if (raw) {
+      const arr = JSON.parse(raw) as ColKey[]
+      if (Array.isArray(arr) && arr.every((c) => ALL_COLUMNS.some((a) => a.key === c))) return arr
+    }
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_ORDER
+}
+
+function loadWidths(): Record<ColKey, number> {
+  try {
+    const raw = localStorage.getItem(WIDTHS_KEY)
+    if (raw) {
+      const obj = JSON.parse(raw) as Record<string, number>
+      const out = { ...DEFAULT_WIDTHS }
+      for (const k of Object.keys(out) as ColKey[]) {
+        if (typeof obj[k] === 'number' && obj[k] > 0) out[k] = obj[k]
+      }
+      return out
+    }
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_WIDTHS
+}
 
 export function BacklogPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
@@ -39,18 +77,15 @@ export function BacklogPage() {
 
   const [criteria, setCriteria] = useState<TrazeCriteria>(emptyCriteria)
   const [commonFilter, setCommonFilter] = useState<string | null>(null)
-  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const arr = JSON.parse(raw) as ColKey[]
-        if (Array.isArray(arr) && arr.every((c) => ALL_COLUMNS.some((a) => a.key === c))) return new Set(arr)
-      }
-    } catch {
-      /* ignore */
-    }
-    return new Set(DEFAULT_VISIBLE)
+  const [order, setOrder] = useState<ColKey[]>(loadOrder)
+  const [widths, setWidths] = useState<Record<ColKey, number>>(loadWidths)
+  const [hidden, setHidden] = useState<Set<ColKey>>(() => {
+    const visible = new Set(loadOrder())
+    return new Set(ALL_COLUMNS.map((c) => c.key).filter((k) => !visible.has(k)))
   })
+
+  const cols = useMemo(() => order.filter((k) => !hidden.has(k)).map((k) => ALL_COLUMNS.find((c) => c.key === k)!), [order, hidden])
+  const allKeys = useMemo(() => new Set(ALL_COLUMNS.map((c) => c.key)), [])
 
   const criteriaTq = useMemo(() => criteriaToTq(criteria, projectKey!), [criteria, projectKey])
   const commonTq = commonFilter ? COMMON_TQ_FILTERS[commonFilter]?.query ?? null : null
@@ -89,31 +124,49 @@ export function BacklogPage() {
     },
   })
 
-  const toggleCol = (k: ColKey) => {
-    setVisibleCols((prev) => {
+  const persistOrder = (next: ColKey[]) => {
+    setOrder(next)
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+  }
+  const persistWidths = (next: Record<ColKey, number>) => {
+    setWidths(next)
+    try { localStorage.setItem(WIDTHS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+  }
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  const onHeaderDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const oldIdx = order.indexOf(active.id as ColKey)
+    const newIdx = order.indexOf(over.id as ColKey)
+    if (oldIdx < 0 || newIdx < 0) return
+    const next = [...order]
+    const [moved] = next.splice(oldIdx, 1)
+    next.splice(newIdx, 0, moved)
+    persistOrder(next)
+  }
+
+  const toggleHidden = (k: ColKey) => {
+    setHidden((prev) => {
       const next = new Set(prev)
-      if (next.has(k)) next.delete(k)
-      else next.add(k)
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]))
-      } catch {
-        /* ignore */
+      if (next.has(k)) {
+        next.delete(k)
+        if (!order.includes(k)) persistOrder([...order, k])
+      } else {
+        next.add(k)
+        persistOrder(order.filter((x) => x !== k))
       }
       return next
     })
   }
 
   const resetCols = () => {
-    setVisibleCols(new Set(DEFAULT_VISIBLE))
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_VISIBLE))
-    } catch {
-      /* ignore */
-    }
+    persistOrder(DEFAULT_ORDER)
+    persistWidths(DEFAULT_WIDTHS)
+    setHidden(new Set())
   }
 
-  const showCol = (k: ColKey) => visibleCols.has(k)
-  const visibleColList = ALL_COLUMNS.filter((c) => showCol(c.key))
+  const showCol = (k: ColKey) => !hidden.has(k)
 
   if (isPending) {
     return (
@@ -136,87 +189,154 @@ export function BacklogPage() {
                 onClick={() => setCommonFilter(commonFilter === id ? null : id)}
                 title={f.query}
                 className={cn(
-                  'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+                  'press-pulse rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
                   commonFilter === id ? 'border-primary/40 bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                 )}
               >
                 {f.label}
               </button>
             ))}
-            <ColumnsMenu visibleCols={visibleCols} onToggle={toggleCol} onReset={resetCols} />
+            <ColumnsMenu hidden={hidden} onToggle={toggleHidden} onReset={resetCols} allKeys={allKeys} />
           </div>
         </div>
-        <TrazeFilterBar issues={issues ?? []} criteria={criteria} onChange={setCriteria} />
+        <TrazeFilterBar issues={serverIssues ?? []} criteria={criteria} onChange={setCriteria} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        <div className="min-w-max">
-          <div className={cn('sticky top-0 z-10 flex items-center gap-3 border-b bg-card/95 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur', visibleCols.has('title') && 'min-w-0')}>
-            {visibleColList.map((c) => (
-              <div key={c.key} className={c.width}>{c.label}</div>
-            ))}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onHeaderDragEnd}>
+        <div className="min-h-0 flex-1 overflow-auto">
+          <div className="min-w-max">
+            <div className="sticky top-0 z-10 border-b bg-card/95 backdrop-blur">
+              <SortableContext items={cols.map((c) => c.key)} strategy={horizontalListSortingStrategy}>
+                <div className="flex items-stretch">
+                  {cols.map((c) => (
+                    <HeaderCell key={c.key} col={c} width={widths[c.key]} onResize={(w) => persistWidths({ ...widths, [c.key]: w })} />
+                  ))}
+                </div>
+              </SortableContext>
+            </div>
+            {sorted.length === 0 ? (
+              <p className="px-6 py-12 text-center text-sm text-muted-foreground">No issues match these filters.</p>
+            ) : (
+              <ul>
+                {sorted.map((issue, idx) => {
+                  const isSelected = selectedIndex === idx
+                  return (
+                    <li key={issue.id} className="row-enter" style={{ animationDelay: `${Math.min(idx * 12, 240)}ms` }}>
+                      {idx > 0 && <hr className="mx-3 border-t border-border/40" />}
+                      <div
+                        ref={setItemRef(idx)}
+                        onClick={() => openIssue(issue)}
+                        className={cn(
+                          'flex w-full cursor-pointer items-center gap-3 px-3 py-1.5 text-left transition-colors hover:bg-accent/40',
+                          isSelected && 'bg-accent/60',
+                        )}
+                      >
+                        {showCol('key') && <span style={{ width: widths.key }} className="shrink-0 font-mono text-[11px] text-muted-foreground">{issue.key}</span>}
+                        {showCol('title') && <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{issue.title}</span>}
+                        {showCol('type') && <div style={{ width: widths.type }} className="shrink-0"><TypeBadge type={issue.type} /></div>}
+                        {showCol('status') && <div style={{ width: widths.status }} className="shrink-0"><StatusBadge status={issue.status} /></div>}
+                        {showCol('priority') && <div style={{ width: widths.priority }} className="shrink-0"><PriorityIcon priority={issue.priority} /></div>}
+                        {showCol('assignee') && <div style={{ width: widths.assignee }} className="shrink-0">{issue.assignee ? <IssueAvatar issue={issue} /> : <span className="text-muted-foreground/40">—</span>}</div>}
+                        {showCol('estimate') && <span style={{ width: widths.estimate }} className="shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">{issue.estimate ?? ''}</span>}
+                        {showCol('sprint') && <span style={{ width: widths.sprint }} className="shrink-0 truncate text-[11px] text-muted-foreground">{issue.sprintName ?? '—'}</span>}
+                        {showCol('epic') && <span style={{ width: widths.epic }} className="shrink-0 truncate text-[11px] text-muted-foreground">{issue.epicName ? `◈ ${issue.epicName}` : ''}</span>}
+                        {showCol('labels') && (
+                          <div style={{ width: widths.labels }} className="flex shrink-0 gap-1 overflow-hidden">
+                            {issue.labels.slice(0, 2).map((l) => <LabelChip key={l.id} name={l.name} color={l.color} />)}
+                            {issue.labels.length > 2 && <span className="text-[10px] text-muted-foreground">+{issue.labels.length - 2}</span>}
+                          </div>
+                        )}
+                        {showCol('created') && <span style={{ width: widths.created }} className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(issue.createdAt)}</span>}
+                        {showCol('updated') && <span style={{ width: widths.updated }} className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(issue.updatedAt)}</span>}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </div>
-          {sorted.length === 0 ? (
-            <p className="px-6 py-12 text-center text-sm text-muted-foreground">No issues match these filters.</p>
-          ) : (
-            <ul>
-              {sorted.map((issue, idx) => {
-                const isSelected = selectedIndex === idx
-                return (
-                  <li key={issue.id}>
-                    {idx > 0 && <hr className="mx-3 border-t border-border/40" />}
-                    <div
-                      ref={setItemRef(idx)}
-                      onClick={() => openIssue(issue)}
-                      className={cn(
-                        'flex w-full cursor-pointer items-center gap-3 px-3 py-1.5 text-left transition-colors hover:bg-accent/40',
-                        isSelected && 'bg-accent/60',
-                      )}
-                    >
-                      {showCol('key') && <span className="w-[90px] shrink-0 font-mono text-[11px] text-muted-foreground">{issue.key}</span>}
-                      {showCol('title') && <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{issue.title}</span>}
-                      {showCol('type') && <div className="w-[80px] shrink-0"><TypeBadge type={issue.type} /></div>}
-                      {showCol('status') && <div className="w-[110px] shrink-0"><StatusBadge status={issue.status} /></div>}
-                      {showCol('priority') && <div className="w-[40px] shrink-0"><PriorityIcon priority={issue.priority} /></div>}
-                      {showCol('assignee') && <div className="w-[44px] shrink-0">{issue.assignee ? <IssueAvatar issue={issue} /> : <span className="text-muted-foreground/40">—</span>}</div>}
-                      {showCol('estimate') && <span className="w-[44px] shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">{issue.estimate ?? ''}</span>}
-                      {showCol('sprint') && <span className="w-[120px] shrink-0 truncate text-[11px] text-muted-foreground">{issue.sprintName ?? '—'}</span>}
-                      {showCol('epic') && <span className="w-[120px] shrink-0 truncate text-[11px] text-muted-foreground">{issue.epicName ? `◈ ${issue.epicName}` : ''}</span>}
-                      {showCol('labels') && (
-                        <div className="flex w-[140px] shrink-0 gap-1 overflow-hidden">
-                          {issue.labels.slice(0, 2).map((l) => <LabelChip key={l.id} name={l.name} color={l.color} />)}
-                          {issue.labels.length > 2 && <span className="text-[10px] text-muted-foreground">+{issue.labels.length - 2}</span>}
-                        </div>
-                      )}
-                      {showCol('created') && <span className="w-[90px] shrink-0 text-[11px] text-muted-foreground">{timeAgo(issue.createdAt)}</span>}
-                      {showCol('updated') && <span className="w-[90px] shrink-0 text-[11px] text-muted-foreground">{timeAgo(issue.updatedAt)}</span>}
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
         </div>
-      </div>
+      </DndContext>
 
       <IssuePanel />
     </div>
   )
 }
 
+function HeaderCell({ col, width, onResize }: { col: ColDef; width: number; onResize: (w: number) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: col.key })
+  const startX = useRef(0)
+  const startW = useRef(0)
+  const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    startX.current = e.clientX
+    startW.current = width
+    const onMove = (ev: MouseEvent) => {
+      const w = Math.max(col.minWidth, startW.current + (ev.clientX - startX.current))
+      onResize(w)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        width: col.key === 'title' ? undefined : width,
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+      }}
+      className={cn(
+        'relative flex shrink-0 items-center gap-1 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground',
+        col.key === 'title' && 'flex-1 min-w-0',
+      )}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="press-pulse flex shrink-0 cursor-grab items-center gap-1 rounded p-0.5 hover:bg-accent/40 active:cursor-grabbing"
+        title="Drag to reorder"
+      >
+        <GripVertical className="size-3" />
+      </button>
+      <span className="truncate">{col.label}</span>
+      {col.key !== 'title' && (
+        <div
+          onMouseDown={onMouseDown}
+          className="absolute -right-0.5 top-0 z-10 h-full w-1.5 cursor-col-resize transition-colors hover:bg-primary/40"
+          title="Drag to resize"
+        />
+      )}
+    </div>
+  )
+}
+
 function ColumnsMenu({
-  visibleCols,
+  hidden,
   onToggle,
   onReset,
+  allKeys,
 }: {
-  visibleCols: Set<ColKey>
+  hidden: Set<ColKey>
   onToggle: (k: ColKey) => void
   onReset: () => void
+  allKeys: Set<ColKey>
 }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground" title="Columns">
+        <button className="press-pulse flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground" title="Columns">
           <Columns3 className="size-3.5" /> Columns
         </button>
       </PopoverTrigger>
@@ -226,7 +346,7 @@ function ColumnsMenu({
           <button onClick={onReset} className="text-[10px] text-muted-foreground hover:text-foreground">Reset</button>
         </div>
         {ALL_COLUMNS.map((c) => {
-          const on = visibleCols.has(c.key)
+          const on = !hidden.has(c.key) && allKeys.has(c.key)
           return (
             <button
               key={c.key}

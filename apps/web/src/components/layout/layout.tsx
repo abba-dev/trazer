@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  BarChart3,
   Boxes,
   Command,
   ExternalLink,
@@ -10,6 +11,7 @@ import {
   Package,
   Plus,
   Search,
+  Settings as SettingsIcon,
   Users,
   X,
   type LucideIcon,
@@ -37,6 +39,7 @@ export function Layout() {
   const { projectKey } = useParams<{ projectKey: string }>()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -115,7 +118,7 @@ export function Layout() {
           onOpenPalette={() => setPaletteOpen(true)}
           onCreate={() => setCreateOpen(true)}
         />
-        <main className="min-h-0 flex-1 overflow-auto">
+        <main key={location.pathname} className="page-enter min-h-0 flex-1 overflow-auto">
           <Outlet />
         </main>
       </div>
@@ -167,8 +170,14 @@ function Sidebar({
         <SidebarSection label="Workspace">
           <SidebarLink to="/projects" icon={Boxes} label="Projects" active={location.pathname === '/projects'} end={false} />
           <SidebarLink to="/search" icon={Search} label="Search" active={location.pathname === '/search'} />
-          {isAdmin && <SidebarLink to="/admin/users" icon={Users} label="Users" end={false} />}
+          <SidebarLink to="/dashboards" icon={BarChart3} label="Dashboards" active={location.pathname === '/dashboards'} />
         </SidebarSection>
+        {isAdmin && (
+          <SidebarSection label="Admin">
+            <SidebarLink to="/admin/users" icon={Users} label="Users" end={false} />
+            <SidebarLink to="/settings" icon={SettingsIcon} label="Trazer settings" active={location.pathname === '/settings'} />
+          </SidebarSection>
+        )}
         {filters.length > 0 && (
           <SidebarSection label="Filters">
             {filters.map((f) => (
@@ -297,6 +306,13 @@ function Topbar({ project, demo, onOpenPalette, onCreate }: { project?: Project;
         <div className="flex items-baseline gap-2 min-w-0">
           <h1 className="truncate text-sm font-semibold">{project.name}</h1>
           <span className="rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{project.key}</span>
+          <Link
+            to={`/projects/${projectKey}/settings`}
+            className="ml-1 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title="Project settings"
+          >
+            <SettingsIcon className="size-3.5" />
+          </Link>
         </div>
       ) : (
         <h1 className="flex items-center gap-2 text-sm font-semibold">

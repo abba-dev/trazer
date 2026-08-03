@@ -23,7 +23,7 @@ export function ColumnToggles({
             key={col.key}
             onClick={() => onToggle(col.key)}
             className={cn(
-              'flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium transition-colors',
+              'press-pulse flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium transition-colors',
               isHidden
                 ? 'border-dashed text-muted-foreground/60 hover:text-foreground'
                 : 'bg-secondary/40 text-foreground hover:bg-accent',

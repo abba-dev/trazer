@@ -45,7 +45,7 @@ export function TrazeFilterBar({
               <button
                 key={v}
                 onClick={() => toggle(plugin.id, v)}
-                className="flex items-center gap-1 rounded-md border bg-primary/15 px-2 py-0.5 text-xs font-medium text-foreground hover:bg-primary/25"
+                className="press-pulse flex items-center gap-1 rounded-md border bg-primary/15 px-2 py-0.5 text-xs font-medium text-foreground hover:bg-primary/25"
                 title={`Remove ${plugin.label} = ${v}`}
               >
                 {v}
@@ -60,7 +60,7 @@ export function TrazeFilterBar({
         <PopoverTrigger asChild>
           <button
             className={cn(
-              'flex items-center gap-1 rounded-md border border-dashed px-2 py-0.5 text-xs font-medium text-muted-foreground hover:border-solid hover:text-foreground',
+              'press-pulse flex items-center gap-1 rounded-md border border-dashed px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:border-solid hover:text-foreground',
               activeCount > 0 && 'border-solid text-foreground',
             )}
           >

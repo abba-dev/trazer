@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { DndContext, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, DragOverlay, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Plus } from 'lucide-react'
@@ -128,6 +128,7 @@ export function BoardPage() {
   })
 
   const [newFor, setNewFor] = useState<{ type: ViewMode; value: string | null } | null>(null)
+  const [activeId, setActiveId] = useState<string | null>(null)
   const createDefaults = newFor
     ? newFor.type === 'status'
       ? (newFor.value as Status)
@@ -206,7 +207,11 @@ export function BoardPage() {
     }
   }
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4, delay: 0, tolerance: 5 } }))
+
+  const onDragStart = (event: DragStartEvent) => {
+    setActiveId(String(event.active.id))
+  }
 
   const toggleColumn = (key: string) => {
     setHiddenColumns((prev) => {
@@ -267,7 +272,7 @@ export function BoardPage() {
       </div>
 
       <div className="flex flex-1 gap-3 overflow-x-auto p-4">
-        <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+        <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
           {columns.map((col) => (
             <BoardColumn
               key={col.key}
@@ -286,6 +291,9 @@ export function BoardPage() {
               }}
             />
           ))}
+          <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' }}>
+            {activeId ? <DragGhost issue={issues?.find((i) => i.id === activeId)} /> : null}
+          </DragOverlay>
         </DndContext>
       </div>
 
@@ -330,7 +338,7 @@ function QuickFilterChip({
       onClick={onClick}
       title={title}
       className={cn(
-        'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+        'press-pulse rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
         active
           ? 'border-primary/40 bg-primary/10 text-foreground'
           : 'text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -442,26 +450,19 @@ function IssueCard({
       style={style}
       onClick={onOpen}
       className={cn(
-        'group cursor-pointer rounded-md border bg-card p-2.5 shadow-sm transition-shadow hover:shadow',
-        isDragging && 'z-10 opacity-60 shadow-lg',
+        'group cursor-grab select-none rounded-md border bg-card p-2.5 shadow-sm transition-all duration-200 ease-[var(--ease-out-quart)] hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing active:scale-[0.98]',
+        isDragging && 'opacity-30',
         selected && 'ring-2 ring-primary/60',
       )}
+      {...attributes}
+      {...listeners}
     >
       <div className="mb-1.5 flex items-center gap-1.5">
         <span className="font-mono text-[11px] text-muted-foreground">{issue.key}</span>
         <TypeBadge type={issue.type} />
         <span className="ml-auto flex items-center gap-1.5">
           <PriorityIcon priority={issue.priority} />
-          <button
-            className="cursor-grab rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground active:cursor-grabbing"
-            {...attributes}
-            {...listeners}
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-            title="Drag to move"
-          >
-            <GripVertical className="size-3.5" />
-          </button>
+          <GripVertical className="size-3.5 text-muted-foreground/40 group-hover:text-muted-foreground" />
         </span>
       </div>
       <p className="text-[13px] font-medium leading-snug">{issue.title}</p>
@@ -477,6 +478,31 @@ function IssueCard({
         <span className="text-[11px] text-muted-foreground">{issue.estimate != null ? `${issue.estimate} pts` : ''}</span>
         <IssueAvatar issue={issue} />
       </div>
+    </div>
+  )
+}
+
+function DragGhost({ issue }: { issue?: Issue }) {
+  if (!issue) return null
+  return (
+    <div className="w-72 rotate-2 cursor-grabbing rounded-md border bg-card p-2.5 shadow-2xl ring-1 ring-primary/20">
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <span className="font-mono text-[11px] text-muted-foreground">{issue.key}</span>
+        <TypeBadge type={issue.type} />
+        <span className="ml-auto flex items-center gap-1.5">
+          <PriorityIcon priority={issue.priority} />
+          <GripVertical className="size-3.5 text-muted-foreground" />
+        </span>
+      </div>
+      <p className="text-[13px] font-medium leading-snug">{issue.title}</p>
+      {issue.epicName && <p className="mt-1 text-[11px] text-muted-foreground">◈ {issue.epicName}</p>}
+      {issue.labels.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {issue.labels.slice(0, 3).map((l) => (
+            <LabelChip key={l.id} name={l.name} color={l.color} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

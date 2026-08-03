@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -71,7 +71,7 @@ export function IssuePanel() {
         setSearchParams(next)
       }
     }}>
-      <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-xl">
+      <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-[min(1100px,90vw)]">
         {isPending && <div className="p-8 text-sm text-muted-foreground">Loading issue…</div>}
         {issue && number && <IssueBody key={issue.id} issue={issue} projectKey={projectKey!} number={number} />}
       </SheetContent>
@@ -425,6 +425,26 @@ function HistorySection({ projectKey, number }: { projectKey: string; number: nu
     queryKey: queryKeys.history(projectKey, number),
     queryFn: () => issueApi.history(projectKey, number),
   })
+  const { data: users } = useQuery({ queryKey: queryKeys.users, queryFn: authApi.users })
+  const { data: sprints } = useQuery({ queryKey: queryKeys.sprints(projectKey), queryFn: () => sprintApi.list(projectKey) })
+  const { data: epics } = useQuery({ queryKey: queryKeys.epics(projectKey), queryFn: () => epicApi.list(projectKey) })
+  const { data: releases } = useQuery({ queryKey: queryKeys.releases(projectKey), queryFn: () => releaseApi.list(projectKey) })
+  const { data: labels } = useQuery({ queryKey: queryKeys.labels(projectKey), queryFn: () => labelApi.list(projectKey) })
+
+  const lookups = useMemo(() => {
+    const u = new Map<string, string>()
+    users?.forEach((x) => u.set(x.id, x.name))
+    const s = new Map<string, string>()
+    sprints?.forEach((x) => s.set(x.id, x.name))
+    const e = new Map<string, string>()
+    epics?.forEach((x) => e.set(x.id, x.name))
+    const r = new Map<string, string>()
+    releases?.forEach((x) => r.set(x.id, x.name))
+    const l = new Map<string, string>()
+    labels?.forEach((x) => l.set(x.id, x.name))
+    return { user: u, sprint: s, epic: e, release: r, label: l }
+  }, [users, sprints, epics, releases, labels])
+
   if (!history?.length) return null
   return (
     <div>
@@ -435,16 +455,49 @@ function HistorySection({ projectKey, number }: { projectKey: string; number: nu
       <div className="relative space-y-3 pl-5">
         <span className="absolute left-1 top-1 bottom-1 w-px bg-border" />
         {history.map((h) => (
-          <HistoryRow key={h.id} h={h} />
+          <HistoryRow key={h.id} h={h} lookups={lookups} />
         ))}
       </div>
     </div>
   )
 }
 
-function HistoryRow({ h }: { h: HistoryEntry }) {
+type HistoryLookups = {
+  user: Map<string, string>
+  sprint: Map<string, string>
+  epic: Map<string, string>
+  release: Map<string, string>
+  label: Map<string, string>
+}
+
+function resolveValue(value: string | null | undefined, field: string, lookups: HistoryLookups): string {
+  if (value == null) return '(empty)'
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+  if (!isUuid) return value
+  const map = (() => {
+    switch (field) {
+      case 'Assignee':
+      case 'Reporter':
+        return lookups.user
+      case 'Sprint':
+        return lookups.sprint
+      case 'Epic':
+        return lookups.epic
+      case 'Release':
+        return lookups.release
+      case 'Labels':
+        return lookups.label
+      default:
+        return null
+    }
+  })()
+  return map?.get(value) ?? value.slice(0, 8) + '…'
+}
+
+function HistoryRow({ h, lookups }: { h: HistoryEntry; lookups: HistoryLookups }) {
   const label = FIELD_LABELS[h.field] ?? h.field
-  const value = h.newValue ?? '(empty)'
+  const oldVal = resolveValue(h.oldValue, h.field, lookups)
+  const newVal = resolveValue(h.newValue, h.field, lookups)
   return (
     <div className="relative">
       <span className="absolute -left-5 top-1.5 size-2 rounded-full border-2 border-background bg-primary" />
@@ -452,10 +505,10 @@ function HistoryRow({ h }: { h: HistoryEntry }) {
         <span className="font-medium text-foreground">{h.actor.name}</span> changed {label}
         {h.oldValue != null && (
           <>
-            {' '}from <span className="line-through">{h.oldValue}</span>
+            {' '}from <span className="line-through">{oldVal}</span>
           </>
         )}
-        {' '}to <span className="font-medium text-foreground">{value}</span>
+        {' '}to <span className="font-medium text-foreground">{newVal}</span>
         <span className="ml-1.5 text-[10px] text-muted-foreground/70">{timeAgo(h.createdAt)}</span>
       </p>
     </div>
