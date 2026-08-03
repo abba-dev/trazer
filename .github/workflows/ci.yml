@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build + test API
+        run: |
+          dotnet build apps/api --nologo
+          dotnet test apps/api.Tests --nologo
+
+      - name: Web build
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm run build
+
+      - name: CLI tests
+        run: npm run test:cli
