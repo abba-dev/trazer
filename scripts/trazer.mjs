@@ -194,6 +194,19 @@ const user = {
     const me = await api('GET', '/api/auth/me')
     console.log(JSON.stringify(me, null, 2))
   },
+  create: async (...args) => {
+    const flags = parseFlags(args)
+    if (!flags.email || !flags.name || !flags.password) {
+      throw new Error('usage: user create --email=<email> --name=<name> --password=<password> [--admin]')
+    }
+    const body = { email: flags.email, name: flags.name, password: flags.password }
+    // --admin (bare) or --admin=true/1/yes/on sets isAdmin; --admin=false or absent leaves it false.
+    if (args.includes('--admin') || ['true', '1', 'yes', 'on'].includes(String(flags.admin).toLowerCase())) {
+      body.isAdmin = true
+    }
+    const r = await api('POST', '/api/auth/users', body)
+    console.log(`created user ${r.email}${r.isAdmin ? ' (admin)' : ''}`)
+  },
 }
 
 const config = {
@@ -250,6 +263,8 @@ API (talks to $TRAZER_API, default http://localhost:8080; needs $TRAZER_TOKEN):
   issue update <key> [flags]       update (--status, --priority, --assignee=<id>, --title, --description)
   issue comment <key> <body>       add a comment
   user me                          current user
+  user create --email=<email> --name=<name> --password=<password> [--admin]
+                                  create a new user (requires admin token)
   config show                      public config (demo flag, etc.)
   admin create --email=<email> --password=<password> [--name=<name>]
                                   bootstrap the first admin (works only when Users is empty)
