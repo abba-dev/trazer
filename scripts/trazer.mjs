@@ -2,9 +2,9 @@
 // Trazer CLI — wraps the root npm scripts and exposes API + dev sub-commands.
 // Long-running commands (dev:*) belong in a sub-agent per AGENTS.md.
 import { spawn, exec } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, writeFileSync, readFileSync, unlinkSync } from 'node:fs'
 import { promisify } from 'node:util'
-import { platform } from 'node:os'
+import { platform, tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 import net from 'node:net'
@@ -13,6 +13,10 @@ import path from 'node:path'
 const execAsync = promisify(exec)
 const isWindows = platform() === 'win32'
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+// ponytail: PID file lets dev.stop kill the specific processes we spawned
+// (no false positives on unrelated "taskboard" matches). The broad kill
+// stays as a safety net for the case where the pid file is missing.
+const pidFile = path.join(tmpdir(), 'trazer-dev.pids')
 
 const API = process.env.TRAZER_API ?? 'http://localhost:8080'
 const TOKEN = process.env.TRAZER_TOKEN ?? null
@@ -152,6 +156,8 @@ const dev = {
       shell: isWindows, windowsHide: true,
     })
     web.unref()
+    // Save PIDs so dev.stop can kill exactly these processes
+    writeFileSync(pidFile, `${api.pid}\n${web.pid}\n`)
     const apiOk = await waitFor(`http://localhost:${apiPort}/api/health`)
     const webOk = await waitFor(`http://localhost:${webPort}`)
     if (apiOk && webOk) {
@@ -186,6 +192,18 @@ const dev = {
   },
   stop: async () => {
     console.log('stopping dev stack...')
+    // Kill the specific PIDs we spawned at dev start (clean, no false positives)
+    try {
+      const content = readFileSync(pidFile, 'utf8')
+      const pids = content.split('\n').map((s) => parseInt(s, 10)).filter((n) => Number.isFinite(n) && n > 0)
+      for (const pid of pids) {
+        try { process.kill(pid) } catch { /* already dead */ }
+      }
+      try { unlinkSync(pidFile) } catch { /* already gone */ }
+    } catch { /* no pid file — fall through to broad kill */ }
+    // Broad kill as a safety net (handles stale processes from a previous
+    // dev start that crashed before writing the pid file, or non-dev tasks
+    // that happen to be on the dev ports)
     await killTaskboardProcesses()
     try {
       await execAsync('docker compose down', { cwd: REPO })
