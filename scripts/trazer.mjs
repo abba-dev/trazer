@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { platform } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { readline } from 'node:readline'
+import { createInterface } from 'node:readline'
 import path from 'node:path'
 
 const execAsync = promisify(exec)
@@ -75,7 +75,7 @@ async function killTaskboardProcesses() {
 async function prompt(question, defaultValue) {
   if (!process.stdin.isTTY) return defaultValue
   return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
     rl.question(`${question} (default: ${defaultValue}): `, (answer) => {
       rl.close()
       resolve(answer.trim() || defaultValue)
