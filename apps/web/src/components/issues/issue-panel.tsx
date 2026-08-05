@@ -40,6 +40,7 @@ import { Textarea } from '../ui/textarea'
 import { Input } from '../ui/input'
 import { Separator } from '../ui/separator'
 import { Avatar, LabelChip, PriorityIcon, StatusBadge, TypeBadge } from './meta'
+import { FileTypeIcon, formatBytes } from './panel-helpers'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu'
 
 export function IssuePanel() {
@@ -701,6 +702,7 @@ function InlineLabels({ issue, projectKey, number }: { issue: Issue; projectKey:
 
 function AttachmentsSection({ projectKey, number }: { projectKey: string; number: number }) {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   const { data: attachments } = useQuery({
     queryKey: queryKeys.attachments(projectKey, number),
     queryFn: () => issueApi.attachments(projectKey, number),
@@ -714,35 +716,71 @@ function AttachmentsSection({ projectKey, number }: { projectKey: string; number
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.attachments(projectKey, number) }),
   })
 
+  const [isDragging, setIsDragging] = useState(false)
+  const uploadFiles = (files: FileList | null) => {
+    if (!files) return
+    Array.from(files).forEach((f) => upload.mutate(f))
+  }
+
   return (
     <div>
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Attachments ({attachments?.length ?? 0})</p>
-      <div className="grid gap-1.5">
-        {attachments?.map((a) => (
-          <div key={a.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
-            <Paperclip className="size-3.5 text-muted-foreground" />
-            <a className="truncate font-medium hover:underline" href={issueApi.downloadUrl(projectKey, number, a.id)} target="_blank" rel="noreferrer">
-              {a.fileName}
-            </a>
-            <span className="ml-auto text-muted-foreground">
-              {Math.round(a.size / 1024)} KB · {a.uploadedBy.name}
-            </span>
-            <button className="text-muted-foreground hover:text-destructive" onClick={() => remove.mutate(a.id)}>
-              <X className="size-3.5" />
-            </button>
-          </div>
-        ))}
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground hover:bg-accent">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Attachments <span className="ml-1 text-muted-foreground/60 tabular-nums">({attachments?.length ?? 0})</span>
+        </p>
+        {upload.isPending && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+      </div>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setIsDragging(false); uploadFiles(e.dataTransfer.files) }}
+        className={cn(
+          'rounded-md border border-dashed transition-colors',
+          isDragging ? 'border-primary bg-primary/10' : 'border-border/60',
+        )}
+      >
+        <ul className="divide-y divide-border/40">
+          {attachments?.map((a) => {
+            const isOwn = a.uploadedBy.id === user?.id
+            return (
+              <li key={a.id} className="group flex items-center gap-2 px-3 py-2 text-xs">
+                <FileTypeIcon contentType={a.contentType} />
+                <a
+                  className="min-w-0 flex-1 truncate font-medium hover:underline"
+                  href={issueApi.downloadUrl(projectKey, number, a.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={a.fileName}
+                >
+                  {a.fileName}
+                </a>
+                <span className="shrink-0 text-muted-foreground tabular-nums">{formatBytes(a.size)}</span>
+                <span className="hidden w-24 shrink-0 truncate text-right text-muted-foreground sm:inline" title={a.uploadedBy.name}>
+                  {a.uploadedBy.name}
+                </span>
+                <span className="hidden w-14 shrink-0 text-right text-muted-foreground/70 sm:inline tabular-nums">
+                  {timeAgo(a.uploadedAt)}
+                </span>
+                <button
+                  className="ml-auto rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-destructive group-hover:opacity-100 disabled:opacity-0"
+                  onClick={() => remove.mutate(a.id)}
+                  title={isOwn ? 'Delete attachment' : 'Only the uploader or a project owner can delete'}
+                  disabled={!isOwn}
+                >
+                  <X className="size-3.5" />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        <label className="flex cursor-pointer items-center gap-2 px-3 py-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent/40">
           <PaperclipIcon className="size-3.5" />
-          {upload.isPending ? 'Uploading…' : 'Attach file'}
+          {upload.isPending ? 'Uploading...' : 'Drop files here or click to attach'}
           <input
             type="file"
+            multiple
             className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) upload.mutate(file)
-              e.target.value = ''
-            }}
+            onChange={(e) => { uploadFiles(e.target.files); e.target.value = '' }}
           />
         </label>
       </div>
