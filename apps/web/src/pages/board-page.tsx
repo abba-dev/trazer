@@ -133,6 +133,30 @@ export function BoardPage() {
     onOpen: openIssue,
   })
 
+  // ponytail: Cmd+Shift+ArrowLeft/Right transitions the focused card to
+  // the previous/next status. Bound at the page level (not in
+  // useListNav) because the useListNav hook filters out modifier keys.
+  useEffect(() => {
+    if (viewMode !== 'status') return
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      if (!((e.metaKey || e.ctrlKey) && e.shiftKey)) return
+      if (selectedIndex < 0) return
+      const focused = visible[selectedIndex]
+      if (!focused) return
+      const curIdx = STATUSES.indexOf(focused.status)
+      if (curIdx < 0) return
+      const nextIdx = e.key === 'ArrowRight' ? curIdx + 1 : e.key === 'ArrowLeft' ? curIdx - 1 : -1
+      if (nextIdx < 0 || nextIdx >= STATUSES.length) return
+      const targetStatus = STATUSES[nextIdx]!
+      const target = (issues ?? []).filter((i) => i.status === targetStatus)
+      move.mutate({ id: focused.id, target: { type: 'status', value: targetStatus }, position: target.length })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [viewMode, selectedIndex, visible, issues, move])
+
   const [newFor, setNewFor] = useState<{ type: ViewMode; value: string | null } | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const createDefaults = newFor
