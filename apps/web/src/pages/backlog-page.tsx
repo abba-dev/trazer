@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { useSortable, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Columns3, GripVertical, Inbox, Loader2 } from 'lucide-react'
-import { issueApi, searchApi, timeAgo, type Issue } from '../lib/api'
+import { Calendar, Columns3, GripVertical, Inbox, Loader2, Plus } from 'lucide-react'
+import { issueApi, searchApi, sprintApi, timeAgo, type Issue, type Sprint } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
 import { useListNav } from '../lib/use-list-nav'
 import { IssueAvatar, LabelChip, PriorityIcon, StatusBadge, TypeBadge } from '../components/issues/meta'
@@ -101,6 +101,13 @@ export function BacklogPage() {
     queryKey: tq ? queryKeys.search(tq) : queryKeys.issues(projectKey!),
     queryFn: () => (tq ? searchApi.query(tq) : issueApi.list(projectKey!)),
   })
+  const { data: sprints } = useQuery({ queryKey: queryKeys.sprints(projectKey!), queryFn: () => sprintApi.list(projectKey!) })
+
+  const assign = useMutation({
+    mutationFn: ({ issueNumber, sprintId }: { issueNumber: number; sprintId: string | null }) =>
+      issueApi.update(projectKey!, issueNumber, { sprintId }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.issues(projectKey!) }),
+  })
 
   const filtered = useMemo(() => {
     const list = serverIssues ?? []
@@ -134,16 +141,33 @@ export function BacklogPage() {
   }
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-  const onHeaderDragEnd = (e: DragEndEvent) => {
+  const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e
     if (!over || active.id === over.id) return
-    const oldIdx = order.indexOf(active.id as ColKey)
-    const newIdx = order.indexOf(over.id as ColKey)
-    if (oldIdx < 0 || newIdx < 0) return
-    const next = [...order]
-    const [moved] = next.splice(oldIdx, 1)
-    next.splice(newIdx, 0, moved)
-    persistOrder(next)
+    const activeId = String(active.id)
+    const overId = String(over.id)
+
+    // Column reorder: id is a ColKey (e.g. "key", "title")
+    if (order.includes(activeId as ColKey) && order.includes(overId as ColKey)) {
+      const oldIdx = order.indexOf(activeId as ColKey)
+      const newIdx = order.indexOf(overId as ColKey)
+      if (oldIdx < 0 || newIdx < 0) return
+      const next = [...order]
+      const [moved] = next.splice(oldIdx, 1)
+      next.splice(newIdx, 0, moved)
+      persistOrder(next)
+      return
+    }
+
+    // Sprint assign: droppable id is "sprint:<id|null>"
+    if (overId.startsWith('sprint:')) {
+      const sprintId = overId.slice('sprint:'.length) || null
+      const issueId = activeId.startsWith('issue:') ? activeId.slice('issue:'.length) : null
+      if (!issueId) return
+      const issue = sorted.find((i) => i.id === issueId)
+      if (!issue || issue.sprintId === sprintId) return
+      assign.mutate({ issueNumber: issue.number, sprintId: sprintId ?? null })
+    }
   }
 
   const toggleHidden = (k: ColKey) => {
@@ -177,18 +201,21 @@ export function BacklogPage() {
             <span className="text-xs text-muted-foreground">Loading…</span>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-hidden p-2">
-          <div className="space-y-0.5">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-md px-3 py-2">
-                <div className="skeleton h-3.5 w-16" />
-                <div className="skeleton h-3.5 flex-1" style={{ maxWidth: `${60 - i * 3}%` }} />
-                <div className="skeleton h-4 w-16" />
-                <div className="skeleton h-4 w-20" />
-                <div className="skeleton size-5 rounded-full" />
-              </div>
-            ))}
+        <div className="flex min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-hidden p-2">
+            <div className="space-y-0.5">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-md px-3 py-2">
+                  <div className="skeleton h-3.5 w-16" />
+                  <div className="skeleton h-3.5 flex-1" style={{ maxWidth: `${60 - i * 3}%` }} />
+                  <div className="skeleton h-4 w-16" />
+                  <div className="skeleton h-4 w-20" />
+                  <div className="skeleton size-5 rounded-full" />
+                </div>
+              ))}
+            </div>
           </div>
+          <SprintPanelSkeleton />
         </div>
       </div>
     )
@@ -220,18 +247,19 @@ export function BacklogPage() {
         <TrazeFilterBar issues={serverIssues ?? []} criteria={criteria} onChange={setCriteria} />
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onHeaderDragEnd}>
-        <div className="min-h-0 flex-1 overflow-auto">
-          <div className="min-w-max">
-            <div className="sticky top-0 z-10 border-b border-border/60 bg-background/85 backdrop-blur-md">
-              <SortableContext items={cols.map((c) => c.key)} strategy={horizontalListSortingStrategy}>
-                <div className="flex items-stretch">
-                  {cols.map((c) => (
-                    <HeaderCell key={c.key} col={c} width={widths[c.key]} onResize={(w) => persistWidths({ ...widths, [c.key]: w })} />
-                  ))}
-                </div>
-              </SortableContext>
-            </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className="min-w-0 flex-1 overflow-auto">
+            <div className="min-w-max">
+              <div className="sticky top-0 z-10 border-b border-border/60 bg-background/85 backdrop-blur-md">
+                <SortableContext items={cols.map((c) => c.key)} strategy={horizontalListSortingStrategy}>
+                  <div className="flex items-stretch">
+                    {cols.map((c) => (
+                      <HeaderCell key={c.key} col={c} width={widths[c.key]} onResize={(w) => persistWidths({ ...widths, [c.key]: w })} />
+                    ))}
+                  </div>
+                </SortableContext>
+              </div>
             {sorted.length === 0 ? (
               <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
                 <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-muted">
@@ -242,44 +270,23 @@ export function BacklogPage() {
               </div>
             ) : (
               <ul role="list" className="px-1.5 py-1.5">
-                {sorted.map((issue, idx) => {
-                  const isSelected = selectedIndex === idx
-                  return (
-                    <li key={issue.id} className="row-enter" style={{ animationDelay: `${Math.min(idx * 12, 200)}ms` }}>
-                      <div
-                        ref={setItemRef(idx)}
-                        onClick={() => openIssue(issue)}
-                        data-selected={isSelected}
-                        className={cn(
-                          'group relative flex h-9 w-full cursor-pointer items-center gap-3 rounded-md px-3 text-left transition-colors duration-100',
-                          isSelected ? 'bg-primary/8' : 'hover:bg-accent/40',
-                        )}
-                      >
-                        {isSelected && <div className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-primary" aria-hidden />}
-                        {showCol('key') && <span style={{ width: widths.key }} className="shrink-0 font-mono text-[11.5px] tracking-tight text-muted-foreground">{issue.key}</span>}
-                        {showCol('title') && <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-tight">{issue.title}</span>}
-                        {showCol('type') && <div style={{ width: widths.type }} className="shrink-0"><TypeBadge type={issue.type} /></div>}
-                        {showCol('status') && <div style={{ width: widths.status }} className="shrink-0"><StatusBadge status={issue.status} /></div>}
-                        {showCol('priority') && <div style={{ width: widths.priority }} className="shrink-0"><PriorityIcon priority={issue.priority} /></div>}
-                        {showCol('assignee') && <div style={{ width: widths.assignee }} className="shrink-0">{issue.assignee ? <IssueAvatar issue={issue} /> : <span className="text-muted-foreground/40">—</span>}</div>}
-                        {showCol('estimate') && <span style={{ width: widths.estimate }} className="shrink-0 text-right text-[11.5px] tabular-nums text-muted-foreground">{issue.estimate ?? ''}</span>}
-                        {showCol('sprint') && <span style={{ width: widths.sprint }} className="shrink-0 truncate text-[11.5px] text-muted-foreground">{issue.sprintName ?? '—'}</span>}
-                        {showCol('epic') && <span style={{ width: widths.epic }} className="shrink-0 truncate text-[11.5px] text-muted-foreground">{issue.epicName ? `◈ ${issue.epicName}` : ''}</span>}
-                        {showCol('labels') && (
-                          <div style={{ width: widths.labels }} className="flex shrink-0 gap-1 overflow-hidden">
-                            {issue.labels.slice(0, 2).map((l) => <LabelChip key={l.id} name={l.name} color={l.color} />)}
-                            {issue.labels.length > 2 && <span className="text-[10px] text-muted-foreground">+{issue.labels.length - 2}</span>}
-                          </div>
-                        )}
-                        {showCol('created') && <span style={{ width: widths.created }} className="shrink-0 text-[11.5px] text-muted-foreground tabular-nums">{timeAgo(issue.createdAt)}</span>}
-                        {showCol('updated') && <span style={{ width: widths.updated }} className="shrink-0 text-[11.5px] text-muted-foreground tabular-nums">{timeAgo(issue.updatedAt)}</span>}
-                      </div>
-                    </li>
-                  )
-                })}
+                {sorted.map((issue, idx) => (
+                  <DraggableIssueRow
+                    key={issue.id}
+                    issue={issue}
+                    idx={idx}
+                    isSelected={selectedIndex === idx}
+                    showCol={showCol}
+                    widths={widths}
+                    setItemRef={setItemRef}
+                    openIssue={openIssue}
+                  />
+                ))}
               </ul>
             )}
+            </div>
           </div>
+          <SprintPanel sprints={sprints ?? []} issues={sorted} />
         </div>
       </DndContext>
 
@@ -388,5 +395,158 @@ function ColumnsMenu({
         })}
       </PopoverContent>
     </Popover>
+  )
+}
+
+function DraggableIssueRow({
+  issue,
+  idx,
+  isSelected,
+  showCol,
+  widths,
+  setItemRef,
+  openIssue,
+}: {
+  issue: Issue
+  idx: number
+  isSelected: boolean
+  showCol: (k: ColKey) => boolean
+  widths: Record<ColKey, number>
+  setItemRef: (index: number) => (el: HTMLElement | null) => void
+  openIssue: (issue: Issue) => void
+}) {
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({ id: `issue:${issue.id}` })
+  return (
+    <li className="row-enter" style={{ animationDelay: `${Math.min(idx * 12, 200)}ms`, opacity: isDragging ? 0.4 : undefined }}>
+      <div
+        ref={setItemRef(idx)}
+        onClick={() => openIssue(issue)}
+        data-selected={isSelected}
+        className={cn(
+          'group relative flex h-9 w-full cursor-pointer items-center gap-3 rounded-md px-3 text-left transition-colors duration-100',
+          isSelected ? 'bg-primary/8' : 'hover:bg-accent/40',
+        )}
+      >
+        {isSelected && <div className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-primary" aria-hidden />}
+        <button
+          ref={setDragRef as unknown as React.Ref<HTMLButtonElement>}
+          {...listeners}
+          {...attributes}
+          onClick={(e) => e.stopPropagation()}
+          className="press-pulse -ml-1 flex h-5 w-3 shrink-0 cursor-grab items-center justify-center rounded text-muted-foreground/0 transition-colors hover:bg-accent group-hover:text-muted-foreground/60 active:cursor-grabbing"
+          title="Drag to assign to a sprint"
+        >
+          <GripVertical className="size-3" />
+        </button>
+        {showCol('key') && <span style={{ width: widths.key }} className="shrink-0 font-mono text-[11.5px] tracking-tight text-muted-foreground">{issue.key}</span>}
+        {showCol('title') && <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-tight">{issue.title}</span>}
+        {showCol('type') && <div style={{ width: widths.type }} className="shrink-0"><TypeBadge type={issue.type} /></div>}
+        {showCol('status') && <div style={{ width: widths.status }} className="shrink-0"><StatusBadge status={issue.status} /></div>}
+        {showCol('priority') && <div style={{ width: widths.priority }} className="shrink-0"><PriorityIcon priority={issue.priority} /></div>}
+        {showCol('assignee') && <div style={{ width: widths.assignee }} className="shrink-0">{issue.assignee ? <IssueAvatar issue={issue} /> : <span className="text-muted-foreground/40">—</span>}</div>}
+        {showCol('estimate') && <span style={{ width: widths.estimate }} className="shrink-0 text-right text-[11.5px] tabular-nums text-muted-foreground">{issue.estimate ?? ''}</span>}
+        {showCol('sprint') && <span style={{ width: widths.sprint }} className="shrink-0 truncate text-[11.5px] text-muted-foreground">{issue.sprintName ?? '—'}</span>}
+        {showCol('epic') && <span style={{ width: widths.epic }} className="shrink-0 truncate text-[11.5px] text-muted-foreground">{issue.epicName ? `◈ ${issue.epicName}` : ''}</span>}
+        {showCol('labels') && (
+          <div style={{ width: widths.labels }} className="flex shrink-0 gap-1 overflow-hidden">
+            {issue.labels.slice(0, 2).map((l) => <LabelChip key={l.id} name={l.name} color={l.color} />)}
+            {issue.labels.length > 2 && <span className="text-[10px] text-muted-foreground">+{issue.labels.length - 2}</span>}
+          </div>
+        )}
+        {showCol('created') && <span style={{ width: widths.created }} className="shrink-0 text-[11.5px] text-muted-foreground tabular-nums">{timeAgo(issue.createdAt)}</span>}
+        {showCol('updated') && <span style={{ width: widths.updated }} className="shrink-0 text-[11.5px] text-muted-foreground tabular-nums">{timeAgo(issue.updatedAt)}</span>}
+      </div>
+    </li>
+  )
+}
+
+function SprintPanel({ sprints, issues }: { sprints: Sprint[]; issues: Issue[] }) {
+  const sortedSprints = useMemo(
+    () => [...sprints].sort((a, b) => (a.isActive ? -1 : b.isActive ? 1 : a.name.localeCompare(b.name))),
+    [sprints],
+  )
+  return (
+    <aside className="flex w-[360px] shrink-0 flex-col border-l border-border/60 bg-card/30">
+      <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+        <Calendar className="size-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold tracking-tight">Sprints</h2>
+        <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">{sprints.length}</span>
+      </div>
+      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+        <BacklogDropZone issues={issues.filter((i) => i.sprintId == null)} />
+        {sortedSprints.map((s) => (
+          <SprintCard key={s.id} sprint={s} issues={issues.filter((i) => i.sprintId === s.id)} />
+        ))}
+      </div>
+    </aside>
+  )
+}
+
+function SprintCard({ sprint, issues }: { sprint: Sprint; issues: Issue[] }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `sprint:${sprint.id}` })
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'rounded-md border bg-card/50 p-2 transition-colors',
+        isOver && 'border-primary bg-primary/5',
+      )}
+    >
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <span className={cn('size-1.5 rounded-full', sprint.isActive ? 'bg-emerald-500' : 'bg-muted-foreground/40')} />
+        <span className="truncate text-[12px] font-semibold">{sprint.name}</span>
+        {sprint.isActive && <span className="rounded-full bg-emerald-500/15 px-1.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Active</span>}
+        <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{issues.length}</span>
+      </div>
+      {sprint.goal && <p className="mb-1.5 truncate text-[10px] text-muted-foreground">{sprint.goal}</p>}
+      <ul className="space-y-0.5">
+        {issues.slice(0, 5).map((i) => (
+          <li key={i.id} className="truncate text-[11px] text-muted-foreground">
+            <span className="font-mono">{i.key}</span> <span className="text-foreground/70">{i.title}</span>
+          </li>
+        ))}
+        {issues.length > 5 && <li className="text-[10px] text-muted-foreground/60">+{issues.length - 5} more</li>}
+        {issues.length === 0 && <li className="text-[10px] italic text-muted-foreground/60">Drop issues here</li>}
+      </ul>
+    </div>
+  )
+}
+
+function SprintPanelSkeleton() {
+  return (
+    <aside className="flex w-[360px] shrink-0 flex-col border-l border-border/60 bg-card/30">
+      <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+        <Calendar className="size-4 text-muted-foreground" />
+        <div className="skeleton h-3.5 w-16" />
+      </div>
+      <div className="space-y-2 p-3">
+        {[60, 80, 40].map((w, i) => (
+          <div key={i} className="rounded-md border bg-card/50 p-2">
+            <div className="skeleton mb-1.5 h-3" style={{ width: `${w}%` }} />
+            <div className="skeleton h-2.5 w-3/4" />
+          </div>
+        ))}
+      </div>
+    </aside>
+  )
+}
+
+function BacklogDropZone({ issues }: { issues: Issue[] }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'sprint:' })
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'rounded-md border border-dashed p-2 transition-colors',
+        isOver ? 'border-primary bg-primary/5' : 'border-border/60',
+      )}
+    >
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <Inbox className="size-3 text-muted-foreground" />
+        <span className="text-[11px] font-medium text-muted-foreground">Backlog (unassigned)</span>
+        <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{issues.length}</span>
+      </div>
+      <p className="text-[10px] italic text-muted-foreground/60">Drop issues here to unschedule</p>
+    </div>
   )
 }
