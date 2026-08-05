@@ -147,6 +147,11 @@ export const projectApi = {
   get: (key: string) => api.get<Project>(`/projects/${key}`),
   update: (key: string, data: { name?: string; description?: string; wipLimits?: string | null }) =>
     api.patch<Project>(`/projects/${key}`, data),
+  export: (key: string, format: 'json' | 'csv') => {
+    const token = getToken()
+    const url = `/api/projects/${key}/export?format=${format}`
+    return fetch(`${API}${url}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  },
   remove: (key: string) => api.delete(`/projects/${key}`),
 }
 

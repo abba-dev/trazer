@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Copy, ExternalLink, Loader2, Plus, Settings as SettingsIcon, Trash2, Users, Webhook } from 'lucide-react'
+import { AlertTriangle, Copy, Download, ExternalLink, FileJson, FileText, Loader2, Plus, Settings as SettingsIcon, Trash2, Users, Webhook } from 'lucide-react'
 import { issueApi, projectApi, authApi, STATUSES, webhookApi } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
 import { Button } from '../components/ui/button'
@@ -117,6 +117,8 @@ export function ProjectSettingsPage() {
 
       <WebhooksSection projectKey={projectKey!} />
 
+      <ExportSection projectKey={projectKey!} />
+
       <section className="rounded-lg border border-destructive/30 bg-destructive/5 p-5">
         <h3 className="mb-2 text-sm font-semibold text-destructive">Danger zone</h3>
         <p className="mb-3 text-xs text-muted-foreground">
@@ -215,6 +217,54 @@ function WipLimitsSection({ projectKey, currentLimits }: { projectKey: string; c
 }
 
 const WEBHOOK_EVENTS = ['issue.created', 'issue.updated', 'issue.deleted', 'issue.commented']
+
+function ExportSection({ projectKey }: { projectKey: string }) {
+  const [busy, setBusy] = useState<null | 'json' | 'csv'>(null)
+  const download = async (format: 'json' | 'csv') => {
+    setBusy(format)
+    try {
+      const res = await projectApi.export(projectKey, format)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const cd = res.headers.get('Content-Disposition') ?? ''
+      const match = cd.match(/filename="?([^";]+)"?/i)
+      const name = match?.[1] ?? `${projectKey}-export.${format}`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = name
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 0)
+    } finally {
+      setBusy(null)
+    }
+  }
+  return (
+    <section className="mb-6 rounded-lg border bg-card p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <Download className="size-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold">Export</h3>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Download a snapshot of the project. JSON includes issues, comments, attachments metadata,
+        history, labels, epics, sprints, and releases. CSV includes issues only, suitable for
+        spreadsheet analysis.
+      </p>
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => download('json')}>
+          {busy === 'json' ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : <FileJson className="mr-1 size-3.5" />}
+          JSON snapshot
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => download('csv')}>
+          {busy === 'csv' ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : <FileText className="mr-1 size-3.5" />}
+          CSV (issues)
+        </Button>
+      </div>
+    </section>
+  )
+}
 
 function WebhooksSection({ projectKey }: { projectKey: string }) {
   const queryClient = useQueryClient()
