@@ -15,4 +15,5 @@ export const queryKeys = {
   search: (q: string) => ['search', q] as const,
   filters: ['filters'] as const,
   config: ['config'] as const,
+  webhooks: (projectKey: string) => ['webhooks', projectKey] as const,
 }

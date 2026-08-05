@@ -236,6 +236,15 @@ export const filterApi = {
   remove: (id: string) => api.delete(`/filters/${id}`),
 }
 
+export type Webhook = { id: string; url: string; events: string; secret: string; createdAt: string }
+
+export const webhookApi = {
+  list: (projectKey: string) => api.get<Webhook[]>(`/projects/${projectKey}/webhooks`),
+  create: (projectKey: string, data: { url: string; events?: string[] }) =>
+    api.post<Webhook>(`/projects/${projectKey}/webhooks`, data),
+  remove: (projectKey: string, id: string) => api.delete(`/projects/${projectKey}/webhooks/${id}`),
+}
+
 export function formatKey(projectKey: string, number: number): string {
   return `${projectKey}-${number}`
 }
