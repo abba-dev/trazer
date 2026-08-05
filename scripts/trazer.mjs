@@ -89,6 +89,48 @@ async function prompt(question, defaultValue) {
   })
 }
 
+// ponytail: hidden password prompt. Raw mode + '*' per char. Returns null
+// when stdin isn't a TTY so the caller can fall back to the env var or
+// the manual setup instructions.
+async function promptPassword(question) {
+  if (!process.stdin.isTTY) return null
+  process.stdout.write(question)
+  const stdin = process.stdin
+  const wasRaw = stdin.isRaw
+  try { stdin.setRawMode(true) } catch { return null }
+  stdin.resume()
+  stdin.setEncoding('utf8')
+  return new Promise((resolve) => {
+    let input = ''
+    const onData = (ch) => {
+      const c = ch.charCodeAt(0)
+      if (c === 0x03) {
+        process.stdout.write('\n')
+        stdin.removeListener('data', onData)
+        try { stdin.setRawMode(wasRaw) } catch { /* noop */ }
+        stdin.pause()
+        process.exit(130)
+      }
+      if (c === 0x0d || c === 0x0a) {
+        process.stdout.write('\n')
+        stdin.removeListener('data', onData)
+        try { stdin.setRawMode(wasRaw) } catch { /* noop */ }
+        stdin.pause()
+        resolve(input)
+        return
+      }
+      if (c === 0x08 || c === 0x7f) {
+        if (input.length > 0) { input = input.slice(0, -1); process.stdout.write('\b \b') }
+        return
+      }
+      if (c < 0x20) return
+      input += ch
+      process.stdout.write('*')
+    }
+    stdin.on('data', onData)
+  })
+}
+
 // ponytail: pure-Node TCP probe to localhost:5432 — no deps, no psql
 // needed for the first check. If Postgres is listening, also try a
 // psql connection to the trazer user/db so we catch "Postgres is up
@@ -114,6 +156,83 @@ async function checkPostgres() {
   return { ok: true }
 }
 
+// ponytail: spawn psql as the postgres superuser and run SQL from stdin.
+// Resolves on exit 0, rejects with stderr on failure. Honors PGPASSWORD
+// from the caller so trust auth and password auth both work.
+function runPsql(superuser, password, sql) {
+  const env = { ...process.env }
+  if (password) env.PGPASSWORD = password
+  return new Promise((resolve, reject) => {
+    const proc = spawn(
+      'psql',
+      ['-h', 'localhost', '-U', superuser, '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-f', '-'],
+      { stdio: ['pipe', 'pipe', 'pipe'], env, shell: isWindows, windowsHide: true },
+    )
+    let stderr = ''
+    proc.stderr.on('data', (d) => { stderr += d.toString() })
+    proc.once('error', reject)
+    proc.once('exit', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(stderr.trim() || `psql exited ${code}`))
+    })
+    proc.stdin.write(sql)
+    proc.stdin.end()
+  })
+}
+
+// ponytail: idempotent CREATE USER + CREATE DATABASE for the trazer role.
+// Tries trust auth first (works on default Windows + many local configs),
+// then prompts for the postgres superuser password, then bails. The SQL
+// uses DO blocks + \gexec so re-running is a no-op.
+async function createTrazerDb() {
+  const sql = [
+    `DO $$ BEGIN`,
+    `  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'trazer') THEN`,
+    `    CREATE USER trazer WITH PASSWORD 'trazer';`,
+    `  END IF;`,
+    `END $$;`,
+    `SELECT 'CREATE DATABASE trazer OWNER trazer'`,
+    `WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'trazer')`,
+    `\gexec`,
+  ].join('\n')
+
+  // 1) Trust auth (PGPASSWORD unset, works on local trust/peer setups)
+  try {
+    await runPsql('postgres', undefined, sql)
+    return true
+  } catch (e) {
+    const msg = e.message ?? ''
+    const recoverable = /password|authentication|peer|role|permission/i.test(msg)
+    if (!recoverable) {
+      console.error(`could not run psql: ${msg || 'unknown error'}`)
+      return false
+    }
+  }
+
+  // 2) Prompt for the postgres superuser password
+  if (process.env.PG_SUPERUSER_PASSWORD) {
+    try {
+      await runPsql('postgres', process.env.PG_SUPERUSER_PASSWORD, sql)
+      return true
+    } catch (e) {
+      console.error(`psql with PG_SUPERUSER_PASSWORD failed: ${e.message}`)
+      return false
+    }
+  }
+  const password = await promptPassword('Postgres superuser (postgres) password (Ctrl+C to abort): ')
+  if (password == null) {
+    console.error('no TTY available for the password prompt; set PG_SUPERUSER_PASSWORD or run the CREATE USER/CREATE DATABASE statements manually.')
+    return false
+  }
+  try {
+    await runPsql('postgres', password, sql)
+    return true
+  } catch (e) {
+    console.error(`psql failed: ${e.message}`)
+    return false
+  }
+}
+
 const dev = {
   native: async () => {
     const apiPort = process.env.TRAZER_API_PORT || await prompt('API port', '8080')
@@ -137,13 +256,29 @@ const dev = {
     const pg = await checkPostgres()
     if (!pg.ok) {
       if (pg.reason === 'not listening') {
-        console.error('Postgres not reachable on localhost:5432. Install it, start it, then:')
-      } else {
-        console.error('Postgres is up but the trazer user/db is missing or inaccessible. Create them:')
+        console.error('Postgres not reachable on localhost:5432. Install it, start it, then re-run this command.')
+        process.exit(1)
       }
-      console.error('  macOS/Linux: sudo -u postgres createuser trazer && sudo -u postgres createdb -O trazer trazer')
-      console.error('  Windows (psql as postgres user): CREATE USER trazer WITH PASSWORD \'trazer\'; CREATE DATABASE trazer OWNER trazer;')
-      process.exit(1)
+      // 'no user/db' — try to set them up as the postgres superuser.
+      console.log('Postgres is up but the trazer user/db is missing. Setting them up as the postgres superuser…')
+      // On Windows, also point at the explicit .bat so the user can run it
+      // manually if they'd rather not type the password into a Node prompt.
+      if (isWindows && existsSync(path.join(REPO, 'scripts', 'setup-postgres.bat'))) {
+        console.log(`  (on Windows you can also run: ${path.join(REPO, 'scripts', 'setup-postgres.bat')})`)
+      }
+      const created = await createTrazerDb()
+      if (!created) {
+        console.error('Could not create the trazer user/db automatically. Run these as the postgres superuser:')
+        console.error('  CREATE USER trazer WITH PASSWORD \'trazer\';')
+        console.error('  CREATE DATABASE trazer OWNER trazer;')
+        process.exit(1)
+      }
+      console.log('✓ created trazer user and database.')
+      const pg2 = await checkPostgres()
+      if (!pg2.ok) {
+        console.error('Postgres is reachable but the trazer user/db is still not connectable. Check pg_hba.conf.')
+        process.exit(1)
+      }
     }
     console.log('starting dev stack (native, Postgres on :5432 assumed)...')
     await killTaskboardProcesses()
@@ -346,7 +481,7 @@ Env:
 
 // ponytail: export the testable internals so scripts/trazer.test.mjs can
 // unit-test them without going through the CLI subprocess.
-export { parseFlags, api, runNpm, waitFor, killTaskboardProcesses, prompt, checkPostgres }
+export { parseFlags, api, runNpm, waitFor, killTaskboardProcesses, prompt, promptPassword, checkPostgres, runPsql, createTrazerDb }
 
 // Run the CLI dispatcher only when this file is invoked directly — not
 // when it's imported by the test runner (or anything else).
