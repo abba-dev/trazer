@@ -18,5 +18,12 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    // ponytail: strict CSP in dev so the policy is exercised on every
+    // reload, not just in production. The Vite HMR script and React
+    // refresh need 'unsafe-inline' for styles; the production build
+    // inlines nothing and the same policy holds.
+    headers: {
+      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' http://localhost:8080 ws: wss:; frame-ancestors 'none';",
+    },
   },
 })
