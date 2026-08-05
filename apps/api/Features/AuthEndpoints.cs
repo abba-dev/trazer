@@ -12,18 +12,32 @@ public static class AuthEndpoints
     {
         var group = app.MapGroup("/api/auth");
 
-        group.MapPost("/login", async (LoginRequest req, TrazerDbContext db, TokenService tokens) =>
+        group.MapPost("/login", async (LoginRequest req, HttpRequest http, TrazerDbContext db, TokenService tokens, LoginThrottle throttle) =>
         {
-            var email = req.Email.Trim().ToLowerInvariant();
-            var user = await db.Users.SingleOrDefaultAsync(u => u.Email == email)
-                ?? throw ApiException.BadRequest("Invalid email or password");
+            var ip = http.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-            if (!BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
-                throw ApiException.BadRequest("Invalid email or password");
+            var wait = throttle.Check(ip);
+            if (wait > 0)
+                return RateLimited(http, wait);
+
+            var email = req.Email.Trim().ToLowerInvariant();
+            var user = await db.Users.SingleOrDefaultAsync(u => u.Email == email);
+
+            if (user is null || !BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
+            {
+                throttle.ReportFailure(ip);
+                return Results.Json(new { error = new { code = "invalid_credentials", message = "Invalid email or password" } },
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
 
             if (user.Disabled)
-                throw ApiException.BadRequest("Account disabled");
+            {
+                throttle.ReportFailure(ip);
+                return Results.Json(new { error = new { code = "account_disabled", message = "Account disabled" } },
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
 
+            throttle.ReportSuccess(ip);
             return Results.Ok(new { token = tokens.CreateToken(user.Id, user.Email), user = user.ToDto() });
         });
 
@@ -115,14 +129,25 @@ public static class AuthEndpoints
         }).RequireAuthorization();
 
         // Demo mode only (Demo__Enabled=true): one-click login as the seeded demo user.
-        group.MapPost("/demo-login", async (IConfiguration config, TrazerDbContext db, TokenService tokens) =>
+        group.MapPost("/demo-login", async (HttpRequest http, IConfiguration config, TrazerDbContext db, TokenService tokens, LoginThrottle throttle) =>
         {
             if (!config.GetValue<bool>("Demo:Enabled"))
                 throw ApiException.NotFound();
+
+            var ip = http.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var wait = throttle.Check(ip);
+            if (wait > 0)
+                return RateLimited(http, wait);
+
             var user = await db.Users.SingleOrDefaultAsync(u => u.Email == DemoDefaults.Email)
                 ?? throw ApiException.BadRequest("Demo user not seeded");
             if (user.Disabled)
+            {
+                throttle.ReportFailure(ip);
                 throw ApiException.BadRequest("Account disabled");
+            }
+
+            throttle.ReportSuccess(ip);
             return Results.Ok(new { token = tokens.CreateToken(user.Id, user.Email), user = user.ToDto() });
         });
 
@@ -151,6 +176,13 @@ public static class AuthEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(new { token = tokens.CreateToken(user.Id, user.Email), user = user.ToDto() });
         });
+    }
+private static IResult RateLimited(HttpRequest http, int waitSeconds)
+    {
+        http.HttpContext.Response.Headers.RetryAfter = waitSeconds.ToString();
+        return Results.Json(
+            new { error = new { code = "rate_limited", message = $"Too many attempts. Try again in {waitSeconds}s." } },
+            statusCode: StatusCodes.Status429TooManyRequests);
     }
 }
 

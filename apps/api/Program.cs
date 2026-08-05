@@ -51,6 +51,7 @@ builder.Services.AddDbContext<TrazerDbContext>(options =>
 builder.Services.AddSingleton<TokenService>();
 builder.Services.AddScoped<CurrentUserService>();
 builder.Services.AddSingleton<WebhookService>();
+builder.Services.AddSingleton<LoginThrottle>();
 
 if (builder.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Demo:Enabled"))
 {
