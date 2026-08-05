@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Copy, Download, ExternalLink, FileJson, FileText, Loader2, Plus, Settings as SettingsIcon, Trash2, Users, Webhook } from 'lucide-react'
-import { issueApi, projectApi, authApi, STATUSES, webhookApi } from '../lib/api'
+import { AlertTriangle, Copy, Download, ExternalLink, FileJson, FileText, Loader2, Plus, Settings as SettingsIcon, Trash2, Upload, Users, Webhook } from 'lucide-react'
+import { issueApi, projectApi, authApi, STATUSES, webhookApi, type ImportReport } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -118,6 +118,8 @@ export function ProjectSettingsPage() {
       <WebhooksSection projectKey={projectKey!} />
 
       <ExportSection projectKey={projectKey!} />
+
+      <ImportSection projectKey={projectKey!} />
 
       <section className="rounded-lg border border-destructive/30 bg-destructive/5 p-5">
         <h3 className="mb-2 text-sm font-semibold text-destructive">Danger zone</h3>
@@ -262,6 +264,77 @@ function ExportSection({ projectKey }: { projectKey: string }) {
           CSV (issues)
         </Button>
       </div>
+    </section>
+  )
+}
+
+function ImportSection({ projectKey }: { projectKey: string }) {
+  const [result, setResult] = useState<ImportReport | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handleFile = async (file: File | null) => {
+    if (!file) return
+    setError(null)
+    setResult(null)
+    try {
+      setResult(await projectApi.importJira(projectKey, file))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed')
+    }
+  }
+
+  return (
+    <section className="mb-6 rounded-lg border bg-card p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <Upload className="size-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold">Import from Jira</h3>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Upload a Jira Cloud or Server JSON export (the search payload). Statuses, types and
+        priorities map to their closest Trazer equivalent; re-importing the same file
+        updates instead of duplicating. Assignees, comments and attachments are not imported.
+      </p>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={(e) => void handleFile(e.target.files?.[0] ?? null)}
+      />
+      <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
+        Upload Jira export
+      </Button>
+
+      {error && (
+        <p className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">{error}</p>
+      )}
+
+      {result && (
+        <div className="mt-3 rounded-md border bg-background/60 p-3 text-xs">
+          <p className="mb-1 flex gap-3 font-medium">
+            <span className="text-foreground">{result.created} created</span>
+            <span className="text-foreground">{result.updated} updated</span>
+            <span className="text-muted-foreground">{result.skipped} skipped</span>
+          </p>
+          {result.report.length > 0 && (
+            <div className="grid max-h-40 gap-1 overflow-y-auto pl-1">
+              {result.report.map((r, i) => (
+                <div key={i} className="flex items-baseline gap-2 text-[11px]">
+                  <span className="font-mono text-muted-foreground">{r.key}</span>
+                  <span className="text-foreground/80">{r.status}</span>
+                  {r.transformed && r.transformed.length > 0 && (
+                    <span className="text-muted-foreground/70">
+                      {r.transformed.map((t) => `${t.field}: ${t.from} → ${t.to}`).join(', ')}
+                    </span>
+                  )}
+                  {r.why && <span className="text-destructive/80">{r.why}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   )
 }

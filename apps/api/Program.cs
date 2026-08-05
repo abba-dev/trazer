@@ -39,6 +39,7 @@ builder.Services.AddAuthorization(options =>
         .Build();
 });
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient();
 
 builder.Services.AddDbContext<TrazerDbContext>(options =>
 {
@@ -98,6 +99,7 @@ EpicEndpoints.Map(app);
 SearchEndpoints.Map(app);
 FilterEndpoints.Map(app);
 WebhookEndpoints.Map(app);
+ImportEndpoints.Map(app);
 
 app.Run();
 

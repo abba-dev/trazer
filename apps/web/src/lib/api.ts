@@ -152,6 +152,19 @@ export const projectApi = {
     const url = `/api/projects/${key}/export?format=${format}`
     return fetch(`${API}${url}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
   },
+  importJira: async (projectKey: string, file: File) => {
+    const token = getToken()
+    const response = await fetch(`/api/projects/${projectKey}/import/jira`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: await file.text(),
+    })
+    if (!response.ok) throw new ApiError(response.status, '', 'Import failed')
+    return response.json() as Promise<ImportReport>
+  },
   remove: (key: string) => api.delete(`/projects/${key}`),
 }
 
@@ -242,6 +255,13 @@ export const filterApi = {
 }
 
 export type Webhook = { id: string; url: string; events: string; secret: string; createdAt: string }
+
+export type ImportReport = {
+  created: number
+  updated: number
+  skipped: number
+  report: { key: string; status: 'created' | 'updated' | 'skipped'; why?: string; transformed?: { field: string; from: string; to: string }[] }[]
+}
 
 export const webhookApi = {
   list: (projectKey: string) => api.get<Webhook[]>(`/projects/${projectKey}/webhooks`),
