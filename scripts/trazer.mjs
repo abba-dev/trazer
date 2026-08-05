@@ -145,9 +145,12 @@ async function checkPostgres() {
     sock.connect(5432, 'localhost')
   })
   if (!tcpOk) return { ok: false, reason: 'not listening' }
+  const psql = await findPsql()
+  if (!psql) return { ok: false, reason: 'no psql' }
   const psqlOk = await new Promise((resolve) => {
-    const proc = spawn('psql', ['-h', 'localhost', '-U', 'trazer', '-d', 'trazer', '-c', 'SELECT 1'], {
-      stdio: 'pipe', shell: isWindows,
+    const useShell = !psql.includes('\\')
+    const proc = spawn(psql, ['-h', 'localhost', '-U', 'trazer', '-d', 'trazer', '-c', 'SELECT 1'], {
+      stdio: 'pipe', shell: useShell, windowsHide: true,
     })
     proc.once('exit', (code) => resolve(code === 0))
     proc.once('error', () => resolve(false))
@@ -156,17 +159,48 @@ async function checkPostgres() {
   return { ok: true }
 }
 
+// ponytail: find psql the same way setup-postgres.bat does — try PATH,
+// then on Windows fall back to the default install dirs (versions 14-17).
+// Returns the executable (just 'psql' if found in PATH, or an absolute
+// path), or null if nothing is found.
+async function findPsql() {
+  const inPath = await new Promise((resolve) => {
+    const proc = spawn('psql', ['--version'], { stdio: 'pipe', shell: true, windowsHide: true })
+    proc.once('exit', (code) => resolve(code === 0))
+    proc.once('error', () => resolve(false))
+  })
+  if (inPath) return 'psql'
+  if (!isWindows) return null
+  // Default install dirs — newest first so a fresh install wins.
+  const candidates = [
+    'C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe',
+    'C:\\Program Files\\PostgreSQL\\16\\bin\\psql.exe',
+    'C:\\Program Files\\PostgreSQL\\15\\bin\\psql.exe',
+    'C:\\Program Files\\PostgreSQL\\14\\bin\\psql.exe',
+    'C:\\Program Files (x86)\\PostgreSQL\\17\\bin\\psql.exe',
+    'C:\\Program Files (x86)\\PostgreSQL\\16\\bin\\psql.exe',
+  ]
+  for (const p of candidates) if (existsSync(p)) return p
+  return null
+}
+
 // ponytail: spawn psql as the postgres superuser and run SQL from stdin.
 // Resolves on exit 0, rejects with stderr on failure. Honors PGPASSWORD
 // from the caller so trust auth and password auth both work.
-function runPsql(superuser, password, sql) {
+async function runPsql(superuser, password, sql) {
+  const psql = await findPsql()
+  if (!psql) throw new Error('psql not found. Add C:\\Program Files\\PostgreSQL\\<ver>\\bin to PATH or run scripts/setup-postgres.bat.')
   const env = { ...process.env }
   if (password) env.PGPASSWORD = password
   return new Promise((resolve, reject) => {
+    // ponytail: when psql is a full path (Windows fallback), spawn it
+    // directly without the shell so spaces in 'C:\Program Files\…' don't
+    // need quoting. When it's the bare 'psql', let the shell resolve PATH.
+    const useShell = !psql.includes('\\')
     const proc = spawn(
-      'psql',
+      psql,
       ['-h', 'localhost', '-U', superuser, '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-f', '-'],
-      { stdio: ['pipe', 'pipe', 'pipe'], env, shell: isWindows, windowsHide: true },
+      { stdio: ['pipe', 'pipe', 'pipe'], env, shell: useShell, windowsHide: true },
     )
     let stderr = ''
     proc.stderr.on('data', (d) => { stderr += d.toString() })
@@ -497,7 +531,7 @@ Env:
 
 // ponytail: export the testable internals so scripts/trazer.test.mjs can
 // unit-test them without going through the CLI subprocess.
-export { parseFlags, api, runNpm, waitFor, killTaskboardProcesses, prompt, promptPassword, checkPostgres, runPsql, createTrazerDb }
+export { parseFlags, api, runNpm, waitFor, killTaskboardProcesses, prompt, promptPassword, checkPostgres, findPsql, runPsql, createTrazerDb }
 
 // Run the CLI dispatcher only when this file is invoked directly — not
 // when it's imported by the test runner (or anything else).
