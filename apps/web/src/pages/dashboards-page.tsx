@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import { cn } from '../lib/utils'
 
-type WidgetKind = 'count' | 'byStatus' | 'byPriority' | 'byAssignee' | 'byType' | 'sumEstimate' | 'burndown'
+type WidgetKind = 'count' | 'byStatus' | 'byPriority' | 'byAssignee' | 'byType' | 'sumEstimate' | 'burndown' | 'unassigned' | 'recentActivity'
 
 type Widget = { id: string; kind: WidgetKind; title: string; query: string }
 type Dashboard = { id: string; name: string; widgets: Widget[] }
@@ -17,9 +17,10 @@ type Dashboard = { id: string; name: string; widgets: Widget[] }
 const STORAGE_KEY = 'trazer.dashboards'
 const DEFAULT_WIDGETS = (): Widget[] => [
   { id: 'w1', kind: 'count', title: 'Total issues', query: '' },
-  { id: 'w2', kind: 'byStatus', title: 'By status', query: '' },
+  { id: 'w2', kind: 'byStatus', title: 'Status distribution', query: '' },
   { id: 'w3', kind: 'burndown', title: 'Burndown', query: '' },
-  { id: 'w4', kind: 'byAssignee', title: 'By assignee', query: '' },
+  { id: 'w4', kind: 'unassigned', title: 'Unassigned', query: '' },
+  { id: 'w5', kind: 'recentActivity', title: 'Recent activity', query: '' },
 ]
 
 function load(): Dashboard[] {
@@ -53,6 +54,8 @@ const WIDGET_KINDS: { id: WidgetKind; label: string }[] = [
   { id: 'byType', label: 'By type' },
   { id: 'sumEstimate', label: 'Sum estimate' },
   { id: 'burndown', label: 'Burndown (active sprint)' },
+  { id: 'unassigned', label: 'Unassigned' },
+  { id: 'recentActivity', label: 'Recent activity' },
 ]
 
 export function DashboardsPage() {
@@ -231,6 +234,20 @@ function WidgetCard({ widget, onUpdate, onRemove }: { widget: Widget; onUpdate: 
       </WidgetShell>
     )
   }
+  if (widget.kind === 'unassigned') {
+    return (
+      <WidgetShell widget={widget} onUpdate={onUpdate} onRemove={onRemove}>
+        <UnassignedWidgetBody />
+      </WidgetShell>
+    )
+  }
+  if (widget.kind === 'recentActivity') {
+    return (
+      <WidgetShell widget={widget} onUpdate={onUpdate} onRemove={onRemove}>
+        <RecentActivityWidgetBody />
+      </WidgetShell>
+    )
+  }
   return (
     <WidgetShell widget={widget} onUpdate={onUpdate} onRemove={onRemove}>
       <SearchWidgetBody widget={widget} />
@@ -361,6 +378,94 @@ function buildBurndown(issues: Issue[], histories: HistoryEntry[][], sprint: Spr
     points.push({ day: d, remaining })
   }
   return points
+}
+
+function UnassignedWidgetBody() {
+  const { data, isPending } = useQuery({
+    queryKey: ['dashboard-unassigned'],
+    queryFn: () => searchApi.query('assignee is empty'),
+    staleTime: 30_000,
+  })
+  if (isPending) {
+    return (
+      <div className="flex h-20 items-center justify-center">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+  const count = data?.length ?? 0
+  const sample = (data ?? []).slice(0, 5)
+  return (
+    <div>
+      <p className="font-mono text-3xl font-semibold tabular-nums">{count}</p>
+      <p className="text-xs text-muted-foreground">issues without an assignee</p>
+      {sample.length > 0 && (
+        <ul className="mt-2 space-y-0.5 border-t border-border/40 pt-2 text-[11px]">
+          {sample.map((i) => (
+            <li key={i.id} className="flex items-center gap-1.5 truncate">
+              <span className="font-mono text-muted-foreground">{i.key}</span>
+              <span className="truncate text-foreground/80">{i.title}</span>
+            </li>
+          ))}
+          {count > sample.length && <li className="text-muted-foreground/60">+{count - sample.length} more</li>}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function RecentActivityWidgetBody() {
+  const { data: projects } = useQuery({ queryKey: queryKeys.projects, queryFn: projectApi.list })
+  const { data: users } = useQuery({ queryKey: queryKeys.users, queryFn: authApi.users })
+  const firstProject = projects?.[0]
+  const { data: issues, isPending: issuesPending } = useQuery({
+    queryKey: firstProject ? queryKeys.issues(firstProject.key) : ['recent-noop'],
+    queryFn: () => issueApi.list(firstProject!.key),
+    enabled: !!firstProject,
+  })
+  const historyQueries = useQueries({
+    queries: (issues ?? []).slice(0, 20).map((i) => ({
+      queryKey: queryKeys.history(firstProject!.key, i.number),
+      queryFn: () => issueApi.history(firstProject!.key, i.number),
+      staleTime: 60_000,
+    })),
+  })
+  if (!projects || projects.length === 0) {
+    return <p className="text-xs text-muted-foreground">No projects yet.</p>
+  }
+  if (issuesPending) {
+    return (
+      <div className="flex h-20 items-center justify-center">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+  const events: { when: string; issueKey: string; issueTitle: string; actor: string; field: string; from: string | null; to: string | null }[] = []
+  for (let i = 0; i < (issues ?? []).slice(0, 20).length; i++) {
+    const issue = (issues ?? [])[i]!
+    const hist = historyQueries[i]?.data ?? []
+    for (const h of hist) {
+      events.push({ when: h.createdAt, issueKey: issue.key, issueTitle: issue.title, actor: h.actor.name, field: h.field, from: h.oldValue, to: h.newValue })
+    }
+  }
+  events.sort((a, b) => b.when.localeCompare(a.when))
+  const top = events.slice(0, 8)
+  const userMap = new Map((users ?? []).map((u) => [u.name, u.id]))
+  void userMap
+  return (
+    <ul className="space-y-1.5">
+      {top.length === 0 && <li className="text-xs text-muted-foreground">No activity yet.</li>}
+      {top.map((e, i) => (
+        <li key={i} className="text-[11.5px] leading-snug text-muted-foreground">
+          <span className="font-medium text-foreground/80">{e.actor}</span>{' '}
+          changed <span className="text-foreground/70">{e.field}</span>
+          {e.from && <> from <span className="line-through">{e.from}</span></>}
+          {' '}to <span className="text-foreground/80">{e.to}</span>
+          {' '}<span className="font-mono text-muted-foreground/70">{e.issueKey}</span>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 function BurndownChart({ points, sprintName, total }: { points: { day: number; remaining: number }[]; sprintName: string; total: number }) {
