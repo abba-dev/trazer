@@ -1,5 +1,5 @@
 @echo off
-REM start.bat — boots Trazer end-to-end
+REM start.bat -- boots Trazer end-to-end
 REM 1. Verify Node is installed
 REM 2. Install apps\web deps if node_modules is missing
 REM 3. Run the dev script (Postgres check + user/db create + API + web)
@@ -33,8 +33,6 @@ if not exist "apps\web\node_modules" (
   )
 )
 
-REM Run the dev script, tee output to the log file so the user can re-read
-REM it after the window closes. (Windows lacks tee, so we redirect manually.)
 node scripts\trazer.mjs dev > "%LOG%" 2>&1
 set "RC=%ERRORLEVEL%"
 
