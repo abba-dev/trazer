@@ -165,6 +165,19 @@ export const projectApi = {
     if (!response.ok) throw new ApiError(response.status, '', 'Import failed')
     return response.json() as Promise<ImportReport>
   },
+  importGithub: async (projectKey: string, file: File) => {
+    const token = getToken()
+    const response = await fetch(`/api/projects/${projectKey}/import/github`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/csv',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: await file.text(),
+    })
+    if (!response.ok) throw new ApiError(response.status, '', 'Import failed')
+    return response.json() as Promise<ImportReport>
+  },
   remove: (key: string) => api.delete(`/projects/${key}`),
 }
 

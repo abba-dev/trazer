@@ -271,16 +271,24 @@ function ExportSection({ projectKey }: { projectKey: string }) {
 function ImportSection({ projectKey }: { projectKey: string }) {
   const [result, setResult] = useState<ImportReport | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState<'jira' | 'github' | null>(null)
+  const jiraRef = useRef<HTMLInputElement>(null)
+  const githubRef = useRef<HTMLInputElement>(null)
 
-  const handleFile = async (file: File | null) => {
+  const handleFile = async (file: File | null, kind: 'jira' | 'github') => {
     if (!file) return
     setError(null)
     setResult(null)
+    setBusy(kind)
     try {
-      setResult(await projectApi.importJira(projectKey, file))
+      const report = kind === 'jira'
+        ? await projectApi.importJira(projectKey, file)
+        : await projectApi.importGithub(projectKey, file)
+      setResult(report)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed')
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -288,23 +296,38 @@ function ImportSection({ projectKey }: { projectKey: string }) {
     <section className="mb-6 rounded-lg border bg-card p-5">
       <div className="mb-3 flex items-center gap-2">
         <Upload className="size-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold">Import from Jira</h3>
+        <h3 className="text-sm font-semibold">Import</h3>
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
-        Upload a Jira Cloud or Server JSON export (the search payload). Statuses, types and
-        priorities map to their closest Trazer equivalent; re-importing the same file
-        updates instead of duplicating. Assignees, comments and attachments are not imported.
+        Bring issues from another tracker. Statuses, types and priorities map to their closest
+        Trazer equivalent; re-importing the same file updates instead of duplicating.
+        Assignees, comments and attachments are not imported. Jira exports: JSON search payload.
+        GitHub: the Issues CSV export (issues only — pull requests are skipped).
       </p>
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".json,application/json"
-        className="hidden"
-        onChange={(e) => void handleFile(e.target.files?.[0] ?? null)}
-      />
-      <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
-        Upload Jira export
-      </Button>
+      <div className="flex gap-2">
+        <input
+          ref={jiraRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={(e) => void handleFile(e.target.files?.[0] ?? null, 'jira')}
+        />
+        <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => jiraRef.current?.click()}>
+          {busy === 'jira' ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : <FileJson className="mr-1 size-3.5" />}
+          Import Jira export
+        </Button>
+        <input
+          ref={githubRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={(e) => void handleFile(e.target.files?.[0] ?? null, 'github')}
+        />
+        <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => githubRef.current?.click()}>
+          {busy === 'github' ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : <FileText className="mr-1 size-3.5" />}
+          Import GitHub CSV
+        </Button>
+      </div>
 
       {error && (
         <p className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">{error}</p>
