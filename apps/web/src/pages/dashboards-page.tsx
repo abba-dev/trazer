@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { BarChart3, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
-import { searchApi, type Issue } from '../lib/api'
+import { useQueries, useQuery } from '@tanstack/react-query'
+import { BarChart3, Loader2, MoreHorizontal, Plus, Trash2, TrendingDown } from 'lucide-react'
+import { authApi, issueApi, projectApi, searchApi, sprintApi, type Issue, type Sprint, type HistoryEntry } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import { cn } from '../lib/utils'
 
-type WidgetKind = 'count' | 'byStatus' | 'byPriority' | 'byAssignee' | 'byType' | 'sumEstimate'
+type WidgetKind = 'count' | 'byStatus' | 'byPriority' | 'byAssignee' | 'byType' | 'sumEstimate' | 'burndown'
 
 type Widget = { id: string; kind: WidgetKind; title: string; query: string }
 type Dashboard = { id: string; name: string; widgets: Widget[] }
@@ -18,7 +18,7 @@ const STORAGE_KEY = 'trazer.dashboards'
 const DEFAULT_WIDGETS = (): Widget[] => [
   { id: 'w1', kind: 'count', title: 'Total issues', query: '' },
   { id: 'w2', kind: 'byStatus', title: 'By status', query: '' },
-  { id: 'w3', kind: 'byPriority', title: 'By priority', query: '' },
+  { id: 'w3', kind: 'burndown', title: 'Burndown', query: '' },
   { id: 'w4', kind: 'byAssignee', title: 'By assignee', query: '' },
 ]
 
@@ -52,6 +52,7 @@ const WIDGET_KINDS: { id: WidgetKind; label: string }[] = [
   { id: 'byAssignee', label: 'By assignee' },
   { id: 'byType', label: 'By type' },
   { id: 'sumEstimate', label: 'Sum estimate' },
+  { id: 'burndown', label: 'Burndown (active sprint)' },
 ]
 
 export function DashboardsPage() {
@@ -223,15 +224,28 @@ function AddWidgetMenu({ onAdd }: { onAdd: (kind: WidgetKind) => void }) {
 }
 
 function WidgetCard({ widget, onUpdate, onRemove }: { widget: Widget; onUpdate: (patch: Partial<Widget>) => void; onRemove: () => void }) {
-  const { data, isPending } = useQuery({
-    queryKey: ['dashboard-widget', widget.id, widget.query],
-    queryFn: () => searchApi.query(widget.query || 'project = *'),
-    enabled: true,
-    staleTime: 30_000,
-  })
+  if (widget.kind === 'burndown') {
+    return (
+      <WidgetShell widget={widget} onUpdate={onUpdate} onRemove={onRemove}>
+        <BurndownWidgetBody />
+      </WidgetShell>
+    )
+  }
+  return (
+    <WidgetShell widget={widget} onUpdate={onUpdate} onRemove={onRemove}>
+      <SearchWidgetBody widget={widget} />
+    </WidgetShell>
+  )
+}
 
-  const computed = useMemo(() => compute(data ?? [], widget.kind), [data, widget.kind])
-
+function WidgetShell({
+  widget, onUpdate, onRemove, children,
+}: {
+  widget: Widget
+  onUpdate: (patch: Partial<Widget>) => void
+  onRemove: () => void
+  children: React.ReactNode
+}) {
   return (
     <div className="rounded-lg border bg-card p-4 transition-shadow hover:shadow-sm">
       <div className="mb-3 flex items-center gap-1">
@@ -240,37 +254,140 @@ function WidgetCard({ widget, onUpdate, onRemove }: { widget: Widget; onUpdate: 
           onChange={(e) => onUpdate({ title: e.target.value })}
           className="h-7 border-transparent bg-transparent px-1 text-sm font-semibold hover:border-border focus:border-border"
         />
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
-              <MoreHorizontal className="size-3.5" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-56 p-2">
-            <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">TQ query</p>
-            <Input
-              placeholder="e.g. status != Done AND priority = High"
-              value={widget.query}
-              onChange={(e) => onUpdate({ query: e.target.value })}
-              className="mb-2 h-7 text-xs"
-            />
-            <button
-              onClick={onRemove}
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
-            >
-              <Trash2 className="size-3.5" /> Remove widget
-            </button>
-          </PopoverContent>
-        </Popover>
+        {widget.kind !== 'burndown' && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
+                <MoreHorizontal className="size-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 p-2">
+              <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">TQ query</p>
+              <Input
+                placeholder="e.g. status != Done AND priority = High"
+                value={widget.query}
+                onChange={(e) => onUpdate({ query: e.target.value })}
+                className="mb-2 h-7 text-xs"
+              />
+              <button
+                onClick={onRemove}
+                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+              >
+                <Trash2 className="size-3.5" /> Remove widget
+              </button>
+            </PopoverContent>
+          </Popover>
+        )}
+        {widget.kind === 'burndown' && (
+          <button onClick={onRemove} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" title="Remove widget">
+            <Trash2 className="size-3.5" />
+          </button>
+        )}
       </div>
+      {children}
+    </div>
+  )
+}
 
-      {isPending ? (
-        <div className="flex h-20 items-center justify-center">
-          <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <WidgetBody data={computed} kind={widget.kind} />
-      )}
+function SearchWidgetBody({ widget }: { widget: Widget }) {
+  const { data, isPending } = useQuery({
+    queryKey: ['dashboard-widget', widget.id, widget.query],
+    queryFn: () => searchApi.query(widget.query || 'project = *'),
+    staleTime: 30_000,
+  })
+  const computed = useMemo(() => compute(data ?? [], widget.kind), [data, widget.kind])
+  if (isPending) {
+    return (
+      <div className="flex h-20 items-center justify-center">
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+  return <WidgetBody data={computed} kind={widget.kind} />
+}
+
+function BurndownWidgetBody() {
+  const { data: projects } = useQuery({ queryKey: queryKeys.projects, queryFn: projectApi.list })
+  const firstProject = projects?.[0]
+  const { data: sprints } = useQuery({
+    queryKey: queryKeys.sprints(firstProject?.key ?? ''),
+    queryFn: () => sprintApi.list(firstProject!.key),
+    enabled: !!firstProject,
+  })
+  const activeSprint = useMemo(() => sprints?.find((s) => s.isActive) ?? sprints?.[0] ?? null, [sprints])
+  const { data: issues } = useQuery({
+    queryKey: queryKeys.issues(activeSprint && firstProject ? firstProject.key : ''),
+    queryFn: () => issueApi.list(firstProject!.key),
+    enabled: !!activeSprint && !!firstProject,
+  })
+  const sprintIssues = useMemo(() => (issues ?? []).filter((i) => i.sprintId === activeSprint?.id), [issues, activeSprint])
+
+  const historyQueries = useQueries({
+    queries: (sprintIssues ?? []).map((i) => ({
+      queryKey: queryKeys.history(firstProject!.key, i.number),
+      queryFn: () => issueApi.history(firstProject!.key, i.number),
+      staleTime: 60_000,
+    })),
+  })
+
+  if (!projects || projects.length === 0) {
+    return <p className="text-xs text-muted-foreground">No projects yet. Create one to see a burndown.</p>
+  }
+  if (!activeSprint) {
+    return <p className="text-xs text-muted-foreground">No active sprint in {firstProject.key}.</p>
+  }
+
+  const points = buildBurndown(sprintIssues, historyQueries.map((q) => q.data ?? []), activeSprint)
+  return <BurndownChart points={points} sprintName={activeSprint.name} total={sprintIssues.reduce((s, i) => s + (i.estimate ?? 1), 0)} />
+}
+
+function buildBurndown(issues: Issue[], histories: HistoryEntry[][], sprint: Sprint) {
+  if (!sprint.startDate) return []
+  const start = new Date(sprint.startDate).getTime()
+  const end = sprint.endDate ? new Date(sprint.endDate).getTime() : Date.now()
+  const days = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)))
+  const totalPoints = issues.reduce((s, i) => s + (i.estimate ?? 1), 0)
+  // For each issue, find the date it was marked Done (or today if not done).
+  const completionDay = (i: Issue, idx: number): number => {
+    const hist = histories[idx] ?? []
+    const done = hist.find((h) => h.field === 'Status' && h.newValue === 'Done')
+    if (!done) return days
+    const day = Math.floor((new Date(done.createdAt).getTime() - start) / (1000 * 60 * 60 * 24))
+    return Math.max(0, Math.min(days, day))
+  }
+  const points: { day: number; remaining: number }[] = []
+  for (let d = 0; d <= days; d++) {
+    const remaining = issues.reduce((sum, i, idx) => sum + (completionDay(i, idx) >= d ? (i.estimate ?? 1) : 0), 0)
+    points.push({ day: d, remaining })
+  }
+  return points
+}
+
+function BurndownChart({ points, sprintName, total }: { points: { day: number; remaining: number }[]; sprintName: string; total: number }) {
+  const W = 280, H = 100, P = 6
+  if (points.length === 0 || total === 0) {
+    return <p className="text-xs text-muted-foreground">No data for {sprintName} yet.</p>
+  }
+  const maxY = Math.max(...points.map((p) => p.remaining), total)
+  const minY = 0
+  const xScale = (d: number) => P + (d / Math.max(1, points.length - 1)) * (W - 2 * P)
+  const yScale = (v: number) => H - P - ((v - minY) / Math.max(1, maxY - minY)) * (H - 2 * P)
+  const ideal = points.map((_, i) => ({ day: i, remaining: total - (total * i) / Math.max(1, points.length - 1) }))
+  const pathActual = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xScale(p.day).toFixed(1)} ${yScale(p.remaining).toFixed(1)}`).join(' ')
+  const pathIdeal = ideal.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xScale(p.day).toFixed(1)} ${yScale(p.remaining).toFixed(1)}`).join(' ')
+  return (
+    <div>
+      <div className="mb-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+        <TrendingDown className="size-3" />
+        <span className="truncate">{sprintName}</span>
+        <span className="ml-auto tabular-nums">{total} pts</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+        <line x1={P} y1={H - P} x2={W - P} y2={H - P} stroke="currentColor" className="text-border/60" strokeWidth="1" />
+        <line x1={P} y1={P} x2={P} y2={H - P} stroke="currentColor" className="text-border/60" strokeWidth="1" />
+        <path d={pathIdeal} fill="none" className="text-muted-foreground/40" strokeWidth="1" strokeDasharray="2 2" />
+        <path d={pathActual} fill="none" className="text-primary" strokeWidth="1.5" />
+      </svg>
     </div>
   )
 }
