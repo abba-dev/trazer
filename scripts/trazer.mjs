@@ -2,7 +2,7 @@
 // Trazer CLI — wraps the root npm scripts and exposes API + dev sub-commands.
 // Long-running commands (dev:*) belong in a sub-agent per AGENTS.md.
 import { spawn, exec } from 'node:child_process'
-import { existsSync, writeFileSync, readFileSync, unlinkSync } from 'node:fs'
+import { existsSync, writeFileSync, readFileSync, unlinkSync, openSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { platform, tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -282,15 +282,28 @@ const dev = {
     }
     console.log('starting dev stack (native, Postgres on :5432 assumed)...')
     await killTaskboardProcesses()
+    const apiLogPath = path.join(tmpdir(), 'trazer-api.log')
+    const webLogPath = path.join(tmpdir(), 'trazer-web.log')
+    const apiLogFd = openSync(apiLogPath, 'w')
+    const webLogFd = openSync(webLogPath, 'w')
     const api = spawn('dotnet', ['run', '--project', 'apps/api', '--no-launch-profile'], {
-      cwd: REPO, env, detached: true, stdio: 'ignore', windowsHide: true,
+      cwd: REPO, env, detached: true, stdio: ['ignore', apiLogFd, apiLogFd], windowsHide: true,
     })
     api.unref()
     const web = spawn('npm', ['run', 'dev', '--', '--port', webPort], {
-      cwd: path.join(REPO, 'apps/web'), env, detached: true, stdio: 'ignore',
+      cwd: path.join(REPO, 'apps/web'), env, detached: true, stdio: ['ignore', webLogFd, webLogFd],
       shell: isWindows, windowsHide: true,
     })
     web.unref()
+    // ponytail: surface child crashes with the log path so the user can
+    // post-mortem read what went wrong. detached: true means the parent
+    // can exit while children run, so the listeners are best-effort.
+    api.on('exit', (code, signal) => {
+      if (code !== 0 && code !== null) console.error(`[dev] API process exited (code ${code}). Tail of ${apiLogPath}:`)
+    })
+    web.on('exit', (code, signal) => {
+      if (code !== 0 && code !== null) console.error(`[dev] Web process exited (code ${code}). Tail of ${webLogPath}:`)
+    })
     // Save PIDs so dev.stop can kill exactly these processes
     writeFileSync(pidFile, `${api.pid}\n${web.pid}\n`)
     const apiOk = await waitFor(`http://localhost:${apiPort}/api/health`)
@@ -301,11 +314,14 @@ const dev = {
       console.log(`  web:  http://localhost:${webPort}`)
       console.log('  login: demo@trazer.dev / password123')
       console.log('  stop: trazer dev stop')
-      console.log('  logs: %TEMP%/trazer-api.log, %TEMP%/trazer-web.log')
+      console.log(`  api log: ${apiLogPath}`)
+      console.log(`  web log: ${webLogPath}`)
     } else {
       console.error('dev stack failed to come up')
       console.error(`  api: ${apiOk ? 'up' : 'down'}`)
       console.error(`  web: ${webOk ? 'up' : 'down'}`)
+      console.error(`  tail api log: ${apiLogPath}`)
+      console.error(`  tail web log: ${webLogPath}`)
       process.exit(1)
     }
   },
