@@ -160,13 +160,13 @@ function Sidebar({
   const queryClient = useQueryClient()
   const location = useLocation()
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r bg-sidebar">
-      <div className="flex h-14 items-center gap-2 border-b px-4">
+    <aside className="flex w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+      <div className="flex h-14 items-center gap-2 px-4">
         <img src="/icon.png" alt="Trazer" className="size-7" />
         <img src="/trzrtext.png" alt="" className="h-5" />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-4">
+      <div className="flex-1 overflow-y-auto px-2.5 py-4">
         <SidebarSection label="Workspace">
           <SidebarLink to="/projects" icon={Boxes} label="Projects" active={location.pathname === '/projects'} end={false} />
           <SidebarLink to="/search" icon={Search} label="Search" active={location.pathname === '/search'} />
@@ -223,14 +223,14 @@ function Sidebar({
         </SidebarSection>
       </div>
 
-      <div className="border-t p-3">
+      <div className="border-t border-sidebar-border p-2.5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent">
+            <button className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/60">
               <Avatar name={user?.name ?? '?'} size={7} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{user?.name}</span>
-                <span className="block truncate text-xs text-muted-foreground">{user?.email}</span>
+                <span className="block truncate text-[13px] font-medium leading-tight">{user?.name}</span>
+                <span className="block truncate text-[11px] text-muted-foreground/80">{user?.email}</span>
               </span>
             </button>
           </DropdownMenuTrigger>
@@ -259,7 +259,7 @@ function Sidebar({
 function SidebarSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mb-5">
-      <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="px-2.5 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/70">{label}</p>
       {children}
     </div>
   )
@@ -285,14 +285,17 @@ function SidebarLink({
       to={to}
       end={end}
       className={cn(
-        'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm',
-        active ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+        'group/link relative flex h-7 items-center gap-2 rounded-md px-2.5 text-[13px] transition-colors duration-100',
+        active
+          ? 'bg-accent/70 font-medium text-foreground'
+          : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
       )}
     >
-      {Icon && <Icon className="size-4 shrink-0" />}
+      {active && <div className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-primary" aria-hidden />}
+      {Icon && <Icon className="size-3.5 shrink-0" />}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {badge != null && badge > 0 && (
-        <span className="rounded-full bg-muted px-1.5 text-[10px] font-medium tabular-nums text-muted-foreground">{badge}</span>
+        <span className="rounded bg-muted/70 px-1.5 text-[10px] font-medium tabular-nums text-muted-foreground">{badge}</span>
       )}
     </NavLink>
   )
@@ -301,30 +304,30 @@ function SidebarLink({
 function Topbar({ project, demo, onOpenPalette, onCreate }: { project?: Project; demo: boolean; onOpenPalette: () => void; onCreate: () => void }) {
   const { projectKey } = useParams<{ projectKey: string }>()
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border/60 px-4">
       {project ? (
         <div className="flex items-baseline gap-2 min-w-0">
-          <h1 className="truncate text-sm font-semibold">{project.name}</h1>
-          <span className="rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{project.key}</span>
+          <h1 className="truncate text-[13.5px] font-semibold tracking-tight">{project.name}</h1>
+          <span className="rounded-md border border-border/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.05em] tabular-nums text-muted-foreground">{project.key}</span>
           <Link
             to={`/projects/${projectKey}/settings`}
-            className="ml-1 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="ml-0.5 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             title="Project settings"
           >
             <SettingsIcon className="size-3.5" />
           </Link>
         </div>
       ) : (
-        <h1 className="flex items-center gap-2 text-sm font-semibold">
+        <h1 className="flex items-center gap-2 text-[13.5px] font-semibold tracking-tight">
           Trazer
           {demo && (
-            <span className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Demo</span>
+            <span className="rounded-md border border-border/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Demo</span>
           )}
         </h1>
       )}
 
       {projectKey && (
-        <nav className="ml-4 flex items-center gap-1">
+        <nav className="ml-3 flex items-center gap-0.5">
           <TabLink to={`/projects/${projectKey}/board`} icon={LayoutGrid} label="Board" />
           <TabLink to={`/projects/${projectKey}/backlog`} icon={ListTodo} label="Backlog" />
           <TabLink to={`/projects/${projectKey}/sprints`} icon={Command} label="Sprints" />
@@ -335,11 +338,11 @@ function Topbar({ project, demo, onOpenPalette, onCreate }: { project?: Project;
       <div className="ml-auto flex items-center gap-2">
         <button
           onClick={onOpenPalette}
-          className="flex items-center gap-2 rounded-md border bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent"
+          className="flex h-7 items-center gap-2 rounded-md border border-border/60 bg-secondary/40 px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60"
         >
           <Search className="size-3.5" />
-          <span className="hidden md:inline">Search with TQ…</span>
-          <kbd className="ml-4 hidden rounded border px-1 font-sans text-[10px] md:inline">Ctrl K</kbd>
+          <span className="hidden text-muted-foreground/80 md:inline">Search with TQ</span>
+          <kbd className="ml-3 hidden rounded border border-border/60 bg-background/50 px-1.5 py-0.5 font-sans text-[10px] tabular-nums text-muted-foreground/80 md:inline">⌘K</kbd>
         </button>
         <Button size="sm" onClick={onCreate}>
           <Plus className="size-4" /> Create
@@ -355,7 +358,7 @@ function TabLink({ to, icon: Icon, label }: { to: string; icon: LucideIcon; labe
       to={to}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+          'flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors duration-100',
           isActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
         )
       }

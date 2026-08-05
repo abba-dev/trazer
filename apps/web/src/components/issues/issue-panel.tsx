@@ -145,30 +145,30 @@ function IssueBody({ issue, projectKey, number }: { issue: Issue; projectKey: st
 
   return (
     <div className="flex flex-col">
-      <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-4 backdrop-blur">
-        <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="font-mono font-medium text-foreground">{issue.key}</span>
-          <span>·</span>
+      <div className="sticky top-0 z-10 border-b border-border/60 bg-background/90 px-7 py-5 backdrop-blur-xl">
+        <div className="mb-2 flex items-center gap-2 text-[11.5px] text-muted-foreground">
+          <span className="font-mono font-medium tracking-tight text-foreground/80">{issue.key}</span>
+          <span className="text-muted-foreground/40">·</span>
           <TypeBadge type={issue.type} />
-          <span className="ml-auto flex items-center gap-1.5">
-            <Clock className="size-3" />
-            Created {new Date(issue.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-            <span className="text-muted-foreground/50">·</span>
-            Updated {timeAgo(issue.updatedAt)}
+          <span className="ml-auto flex items-center gap-1.5 tabular-nums">
+            <Clock className="size-3 text-muted-foreground/70" />
+            <span>Created {new Date(issue.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            <span className="text-muted-foreground/40">·</span>
+            <span>Updated {timeAgo(issue.updatedAt)}</span>
           </span>
         </div>
         <TitleEditor issue={issue} onSave={(title) => update.mutate({ title })} editRequestRef={titleEdit} />
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <InlineStatus status={issue.status} onSelect={(status) => update.mutate({ status })} />
           <InlinePriority priority={issue.priority} onSelect={(priority) => update.mutate({ priority })} />
         </div>
       </div>
 
-      <div className="px-6 py-5">
+      <div className="px-7 py-6">
         <DescriptionEditor issue={issue} onSave={(description) => update.mutate({ description: description || null })} />
-        <Separator className="my-5" />
+        <Separator className="my-6 bg-border/40" />
         <CommentsSection projectKey={projectKey} number={number} />
-        <Separator className="my-5" />
+        <Separator className="my-6 bg-border/40" />
         <HistorySection projectKey={projectKey} number={number} />
       </div>
 
@@ -258,8 +258,8 @@ function TitleEditor({ issue, onSave, editRequestRef }: {
   }
 
   return (
-    <button className="group -mx-1 block w-full rounded-md px-1 py-0.5 text-left hover:bg-accent/50" onClick={requestEdit}>
-      <h2 className="text-base font-semibold leading-snug">{issue.title}</h2>
+    <button className="group -mx-1.5 block w-full rounded-md px-1.5 py-0.5 text-left transition-colors hover:bg-accent/40" onClick={requestEdit}>
+      <h1 className="font-display text-[20px] font-semibold leading-[1.3] tracking-[-0.018em]">{issue.title}</h1>
     </button>
   )
 }
@@ -335,7 +335,7 @@ function DescriptionEditor({ issue, onSave }: { issue: Issue; onSave: (d: string
   }
 
   return (
-    <button className="group w-full rounded-md p-1 text-left hover:bg-accent/50" onClick={() => setEditing(true)}>
+    <button className="group w-full rounded-md p-1 text-left transition-colors hover:bg-accent/40" onClick={() => setEditing(true)}>
       {issue.description ? (
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{issue.description}</p>
       ) : (
@@ -367,47 +367,51 @@ function CommentsSection({ projectKey, number }: { projectKey: string; number: n
 
   return (
     <div>
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-        <MessageSquare className="size-4 text-muted-foreground" />
+      <h3 className="mb-4 flex items-center gap-2 text-[13px] font-semibold tracking-tight">
+        <MessageSquare className="size-3.5 text-muted-foreground" />
         Comments
-        <span className="text-xs font-normal text-muted-foreground">{comments?.length ?? 0}</span>
+        {comments && comments.length > 0 && <span className="rounded-full bg-muted px-1.5 text-[10px] font-medium tabular-nums text-muted-foreground">{comments.length}</span>}
       </h3>
-      <div className="grid gap-3">
+      <div className="grid gap-4">
         {comments?.map((c) => (
-          <div key={c.id} className="flex gap-3">
-            <Avatar name={c.author.name} />
-            <div className="min-w-0 flex-1 rounded-lg border bg-card p-3">
-              <div className="mb-1 flex items-center gap-2 text-xs">
-                <span className="font-semibold">{c.author.name}</span>
-                <span className="text-muted-foreground">{timeAgo(c.createdAt)}</span>
+          <div key={c.id} className="group flex gap-3">
+            <Avatar name={c.author.name} size={7} />
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-1.5 text-xs">
+                <span className="font-medium text-foreground">{c.author.name}</span>
+                <span className="text-muted-foreground/70 tabular-nums">{timeAgo(c.createdAt)}</span>
                 <button
-                  className="ml-auto text-muted-foreground hover:text-destructive"
+                  className="ml-auto rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-destructive group-hover:opacity-100"
                   onClick={() => remove.mutate(c.id)}
                   title="Delete comment"
                 >
-                  <X className="size-3.5" />
+                  <X className="size-3" />
                 </button>
               </div>
-              <p className="whitespace-pre-wrap text-sm">{c.body}</p>
+              <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-foreground/90">{c.body}</p>
             </div>
           </div>
         ))}
-        <div className="flex gap-2">
+        {comments?.length === 0 && (
+          <p className="text-xs text-muted-foreground/70">No comments yet.</p>
+        )}
+        <div className="rounded-lg border border-border/60 bg-card/30 p-3">
           <Textarea
             rows={3}
-            placeholder="Write a comment…"
+            placeholder="Write a comment… (⌘↵ to send)"
             value={body}
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) void add.mutate()
             }}
+            className="border-0 bg-transparent p-0 focus-visible:ring-0"
           />
-        </div>
-        <div className="flex justify-end">
-          <Button size="sm" disabled={!body.trim() || add.isPending} onClick={() => add.mutate()}>
-            {add.isPending && <Loader2 className="mr-1 size-3.5 animate-spin" />}
-            Comment
-          </Button>
+          <div className="mt-2 flex justify-end">
+            <Button size="sm" disabled={!body.trim() || add.isPending} onClick={() => add.mutate()}>
+              {add.isPending && <Loader2 className="mr-1 size-3.5 animate-spin" />}
+              Comment
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -448,12 +452,13 @@ function HistorySection({ projectKey, number }: { projectKey: string; number: nu
   if (!history?.length) return null
   return (
     <div>
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-        <History className="size-4 text-muted-foreground" />
+      <h3 className="mb-4 flex items-center gap-2 text-[13px] font-semibold tracking-tight">
+        <History className="size-3.5 text-muted-foreground" />
         History
+        <span className="rounded-full bg-muted px-1.5 text-[10px] font-medium tabular-nums text-muted-foreground">{history.length}</span>
       </h3>
-      <div className="relative space-y-3 pl-5">
-        <span className="absolute left-1 top-1 bottom-1 w-px bg-border" />
+      <div className="relative space-y-3 pl-4">
+        <span className="absolute left-[3px] top-2 bottom-2 w-px bg-border/60" />
         {history.map((h) => (
           <HistoryRow key={h.id} h={h} lookups={lookups} />
         ))}
@@ -500,16 +505,16 @@ function HistoryRow({ h, lookups }: { h: HistoryEntry; lookups: HistoryLookups }
   const newVal = resolveValue(h.newValue, h.field, lookups)
   return (
     <div className="relative">
-      <span className="absolute -left-5 top-1.5 size-2 rounded-full border-2 border-background bg-primary" />
+      <span className="absolute -left-[18px] top-1.5 size-1.5 rounded-full bg-primary ring-2 ring-background" />
       <p className="text-xs leading-relaxed text-muted-foreground">
-        <span className="font-medium text-foreground">{h.actor.name}</span> changed {label}
+        <span className="font-medium text-foreground/90">{h.actor.name}</span> changed {label}
         {h.oldValue != null && (
           <>
-            {' '}from <span className="line-through">{oldVal}</span>
+            {' '}from <span className="line-through text-foreground/60">{oldVal}</span>
           </>
         )}
-        {' '}to <span className="font-medium text-foreground">{newVal}</span>
-        <span className="ml-1.5 text-[10px] text-muted-foreground/70">{timeAgo(h.createdAt)}</span>
+        {' '}to <span className="font-medium text-foreground/90">{newVal}</span>
+        <span className="ml-1.5 tabular-nums text-[10px] text-muted-foreground/60">{timeAgo(h.createdAt)}</span>
       </p>
     </div>
   )

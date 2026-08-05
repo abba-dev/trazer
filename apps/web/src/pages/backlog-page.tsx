@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { useSortable, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Columns3, GripVertical, Loader2 } from 'lucide-react'
+import { Columns3, GripVertical, Inbox, Loader2 } from 'lucide-react'
 import { issueApi, searchApi, timeAgo, type Issue } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
 import { useListNav } from '../lib/use-list-nav'
@@ -170,8 +170,26 @@ export function BacklogPage() {
 
   if (isPending) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex flex-col gap-2 border-b border-border/60 px-5 py-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold tracking-tight">Issue list</h2>
+            <span className="text-xs text-muted-foreground">Loading…</span>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden p-2">
+          <div className="space-y-0.5">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-md px-3 py-2">
+                <div className="skeleton h-3.5 w-16" />
+                <div className="skeleton h-3.5 flex-1" style={{ maxWidth: `${60 - i * 3}%` }} />
+                <div className="skeleton h-4 w-16" />
+                <div className="skeleton h-4 w-20" />
+                <div className="skeleton size-5 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
@@ -205,7 +223,7 @@ export function BacklogPage() {
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onHeaderDragEnd}>
         <div className="min-h-0 flex-1 overflow-auto">
           <div className="min-w-max">
-            <div className="sticky top-0 z-10 border-b bg-card/95 backdrop-blur">
+            <div className="sticky top-0 z-10 border-b border-border/60 bg-background/85 backdrop-blur-md">
               <SortableContext items={cols.map((c) => c.key)} strategy={horizontalListSortingStrategy}>
                 <div className="flex items-stretch">
                   {cols.map((c) => (
@@ -215,39 +233,46 @@ export function BacklogPage() {
               </SortableContext>
             </div>
             {sorted.length === 0 ? (
-              <p className="px-6 py-12 text-center text-sm text-muted-foreground">No issues match these filters.</p>
+              <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
+                <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-muted">
+                  <Inbox className="size-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium text-foreground">No issues match</p>
+                <p className="mt-1 text-xs text-muted-foreground">Try removing some filters or check your TQ query.</p>
+              </div>
             ) : (
-              <ul>
+              <ul role="list" className="px-1.5 py-1.5">
                 {sorted.map((issue, idx) => {
                   const isSelected = selectedIndex === idx
                   return (
-                    <li key={issue.id} className="row-enter" style={{ animationDelay: `${Math.min(idx * 12, 240)}ms` }}>
-                      {idx > 0 && <hr className="mx-3 border-t border-border/40" />}
+                    <li key={issue.id} className="row-enter" style={{ animationDelay: `${Math.min(idx * 12, 200)}ms` }}>
                       <div
                         ref={setItemRef(idx)}
                         onClick={() => openIssue(issue)}
+                        data-selected={isSelected}
                         className={cn(
-                          'flex w-full cursor-pointer items-center gap-3 px-3 py-1.5 text-left transition-colors hover:bg-accent/40',
-                          isSelected && 'bg-accent/60',
+                          'group relative flex h-9 w-full cursor-pointer items-center gap-3 rounded-md px-3 text-left transition-colors duration-100',
+                          isSelected ? 'bg-primary/8' : 'hover:bg-accent/40',
                         )}
                       >
-                        {showCol('key') && <span style={{ width: widths.key }} className="shrink-0 font-mono text-[11px] text-muted-foreground">{issue.key}</span>}
-                        {showCol('title') && <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{issue.title}</span>}
+                        {isSelected && <div className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-primary" aria-hidden />}
+                        {showCol('key') && <span style={{ width: widths.key }} className="shrink-0 font-mono text-[11.5px] tracking-tight text-muted-foreground">{issue.key}</span>}
+                        {showCol('title') && <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-tight">{issue.title}</span>}
                         {showCol('type') && <div style={{ width: widths.type }} className="shrink-0"><TypeBadge type={issue.type} /></div>}
                         {showCol('status') && <div style={{ width: widths.status }} className="shrink-0"><StatusBadge status={issue.status} /></div>}
                         {showCol('priority') && <div style={{ width: widths.priority }} className="shrink-0"><PriorityIcon priority={issue.priority} /></div>}
                         {showCol('assignee') && <div style={{ width: widths.assignee }} className="shrink-0">{issue.assignee ? <IssueAvatar issue={issue} /> : <span className="text-muted-foreground/40">—</span>}</div>}
-                        {showCol('estimate') && <span style={{ width: widths.estimate }} className="shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">{issue.estimate ?? ''}</span>}
-                        {showCol('sprint') && <span style={{ width: widths.sprint }} className="shrink-0 truncate text-[11px] text-muted-foreground">{issue.sprintName ?? '—'}</span>}
-                        {showCol('epic') && <span style={{ width: widths.epic }} className="shrink-0 truncate text-[11px] text-muted-foreground">{issue.epicName ? `◈ ${issue.epicName}` : ''}</span>}
+                        {showCol('estimate') && <span style={{ width: widths.estimate }} className="shrink-0 text-right text-[11.5px] tabular-nums text-muted-foreground">{issue.estimate ?? ''}</span>}
+                        {showCol('sprint') && <span style={{ width: widths.sprint }} className="shrink-0 truncate text-[11.5px] text-muted-foreground">{issue.sprintName ?? '—'}</span>}
+                        {showCol('epic') && <span style={{ width: widths.epic }} className="shrink-0 truncate text-[11.5px] text-muted-foreground">{issue.epicName ? `◈ ${issue.epicName}` : ''}</span>}
                         {showCol('labels') && (
                           <div style={{ width: widths.labels }} className="flex shrink-0 gap-1 overflow-hidden">
                             {issue.labels.slice(0, 2).map((l) => <LabelChip key={l.id} name={l.name} color={l.color} />)}
                             {issue.labels.length > 2 && <span className="text-[10px] text-muted-foreground">+{issue.labels.length - 2}</span>}
                           </div>
                         )}
-                        {showCol('created') && <span style={{ width: widths.created }} className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(issue.createdAt)}</span>}
-                        {showCol('updated') && <span style={{ width: widths.updated }} className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(issue.updatedAt)}</span>}
+                        {showCol('created') && <span style={{ width: widths.created }} className="shrink-0 text-[11.5px] text-muted-foreground tabular-nums">{timeAgo(issue.createdAt)}</span>}
+                        {showCol('updated') && <span style={{ width: widths.updated }} className="shrink-0 text-[11.5px] text-muted-foreground tabular-nums">{timeAgo(issue.updatedAt)}</span>}
                       </div>
                     </li>
                   )
@@ -298,14 +323,14 @@ function HeaderCell({ col, width, onResize }: { col: ColDef; width: number; onRe
         opacity: isDragging ? 0.4 : 1,
       }}
       className={cn(
-        'relative flex shrink-0 items-center gap-1 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground',
+        'group/head relative flex h-8 shrink-0 items-center gap-1 px-3 text-[10.5px] font-medium uppercase tracking-[0.04em] text-muted-foreground/80',
         col.key === 'title' && 'flex-1 min-w-0',
       )}
     >
       <button
         {...attributes}
         {...listeners}
-        className="press-pulse flex shrink-0 cursor-grab items-center gap-1 rounded p-0.5 hover:bg-accent/40 active:cursor-grabbing"
+        className="press-pulse flex shrink-0 cursor-grab items-center gap-1 rounded p-0.5 opacity-0 transition-opacity hover:bg-accent/40 active:cursor-grabbing group-hover/head:opacity-100"
         title="Drag to reorder"
       >
         <GripVertical className="size-3" />
@@ -314,7 +339,7 @@ function HeaderCell({ col, width, onResize }: { col: ColDef; width: number; onRe
       {col.key !== 'title' && (
         <div
           onMouseDown={onMouseDown}
-          className="absolute -right-0.5 top-0 z-10 h-full w-1.5 cursor-col-resize transition-colors hover:bg-primary/40"
+          className="absolute -right-0.5 top-0 z-10 h-full w-1.5 cursor-col-resize transition-colors hover:bg-primary/30"
           title="Drag to resize"
         />
       )}
