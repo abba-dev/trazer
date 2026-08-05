@@ -5,7 +5,7 @@ import { DndContext, DragOverlay, PointerSensor, useDroppable, useSensor, useSen
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Plus } from 'lucide-react'
-import { filterApi, issueApi, searchApi, sprintApi, STATUSES, type Issue, type Sprint, type Status } from '../lib/api'
+import { filterApi, issueApi, projectApi, searchApi, sprintApi, STATUSES, type Issue, type Sprint, type Status } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
 import { cn } from '../lib/utils'
 import { useListNav } from '../lib/use-list-nav'
@@ -33,6 +33,7 @@ export function BoardPage() {
 
   const { data: savedFilters } = useQuery({ queryKey: queryKeys.filters, queryFn: filterApi.list })
   const { data: sprints } = useQuery({ queryKey: queryKeys.sprints(projectKey!), queryFn: () => sprintApi.list(projectKey!) })
+  const { data: project } = useQuery({ queryKey: queryKeys.project(projectKey!), queryFn: () => projectApi.get(projectKey!) })
 
   const saved = savedFilters?.find((f) => f.id === activeFilter) ?? null
   const commonTq = commonFilter ? COMMON_TQ_FILTERS[commonFilter]?.query ?? null : null
@@ -67,6 +68,11 @@ export function BoardPage() {
       return bd - ad
     })
   }, [sprints])
+
+  const wipLimits = useMemo<Record<string, number>>(() => {
+    if (!project?.wipLimits) return {}
+    try { return JSON.parse(project.wipLimits) as Record<string, number> } catch { return {} }
+  }, [project?.wipLimits])
 
   const visible = useMemo(() => {
     const sorted = [...mineFiltered].sort((a, b) => a.position - b.position)
@@ -273,24 +279,28 @@ export function BoardPage() {
 
       <div className="flex flex-1 gap-3 overflow-x-auto p-4">
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
-          {columns.map((col) => (
-            <BoardColumn
-              key={col.key}
-              columnKey={col.key}
-              title={col.title}
-              dot={col.dot}
-              issues={col.issues}
-              visible={visible}
-              target={col.target}
-              viewMode={viewMode}
-              selectedIndex={selectedIndex}
-              setItemRef={setItemRef}
-              onCreate={() => {
-                if (col.target.type === 'status') setNewFor({ type: 'status', value: col.target.value })
-                else setNewFor({ type: 'sprint', value: col.target.value })
-              }}
-            />
-          ))}
+          {columns.map((col) => {
+            const limit = col.target.type === 'status' ? wipLimits[col.target.value] : undefined
+            return (
+              <BoardColumn
+                key={col.key}
+                columnKey={col.key}
+                title={col.title}
+                dot={col.dot}
+                issues={col.issues}
+                visible={visible}
+                target={col.target}
+                viewMode={viewMode}
+                wipLimit={limit}
+                selectedIndex={selectedIndex}
+                setItemRef={setItemRef}
+                onCreate={() => {
+                  if (col.target.type === 'status') setNewFor({ type: 'status', value: col.target.value })
+                  else setNewFor({ type: 'sprint', value: col.target.value })
+                }}
+              />
+            )
+          })}
           <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' }}>
             {activeId ? <DragGhost issue={issues?.find((i) => i.id === activeId)} /> : null}
           </DragOverlay>
@@ -357,6 +367,7 @@ function BoardColumn({
   visible,
   target,
   viewMode,
+  wipLimit,
   selectedIndex,
   setItemRef,
   onCreate,
@@ -368,6 +379,7 @@ function BoardColumn({
   visible: Issue[]
   target: { type: 'status'; value: Status } | { type: 'sprint'; value: string | null }
   viewMode: ViewMode
+  wipLimit?: number
   selectedIndex: number
   setItemRef: (index: number) => (el: HTMLElement | null) => void
   onCreate: () => void
@@ -375,6 +387,7 @@ function BoardColumn({
   const [searchParams, setSearchParams] = useSearchParams()
   const droppableId = target.type === 'status' ? `column:status:${target.value}` : `column:sprint:${target.value ?? 'null'}`
   const { setNodeRef, isOver } = useDroppable({ id: droppableId })
+  const overWip = wipLimit != null && issues.length > wipLimit
 
   const openIssue = (issue: Issue) => {
     const next = new URLSearchParams(searchParams)
@@ -390,14 +403,22 @@ function BoardColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30',
+        'flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30 transition-colors',
         isOver && 'ring-2 ring-primary/40',
+        overWip && 'border-destructive/60 bg-destructive/5 ring-1 ring-destructive/30',
       )}
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
         <span className={cn('size-2 rounded-full', dot)} />
         <span className="truncate text-xs font-semibold uppercase tracking-wide">{title}</span>
-        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">{issues.length}</span>
+        <span
+          className={cn(
+            'rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums',
+            overWip ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {issues.length}{wipLimit != null && <span className="opacity-60">/{wipLimit}</span>}
+        </span>
         <button onClick={onCreate} className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground" title={`Add to ${title}`}>
           <Plus className="size-3.5" />
         </button>

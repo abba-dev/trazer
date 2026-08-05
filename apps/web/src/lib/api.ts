@@ -38,6 +38,7 @@ export type Project = {
   name: string
   description: string | null
   issueCount: number
+  wipLimits: string | null
   createdAt: string
 }
 
@@ -144,7 +145,7 @@ export const projectApi = {
   create: (data: { key: string; name: string; description?: string }) =>
     api.post<Project>('/projects', data),
   get: (key: string) => api.get<Project>(`/projects/${key}`),
-  update: (key: string, data: { name?: string; description?: string }) =>
+  update: (key: string, data: { name?: string; description?: string; wipLimits?: string | null }) =>
     api.patch<Project>(`/projects/${key}`, data),
   remove: (key: string) => api.delete(`/projects/${key}`),
 }

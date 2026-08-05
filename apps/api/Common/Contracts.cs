@@ -4,7 +4,7 @@ namespace Trazer.Api.Common;
 
 public record UserDto(Guid Id, string Email, string Name, bool IsAdmin, bool Disabled);
 
-public record ProjectDto(Guid Id, string Key, string Name, string? Description, int IssueCount, DateTime CreatedAt);
+public record ProjectDto(Guid Id, string Key, string Name, string? Description, int IssueCount, string? WipLimits, DateTime CreatedAt);
 
 public record IssueDto(
     Guid Id,

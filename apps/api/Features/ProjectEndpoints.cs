@@ -20,7 +20,7 @@ public static class ProjectEndpoints
                 .OrderBy(p => p.Name)
                 .Select(p => new ProjectDto(
                     p.Id, p.Key, p.Name, p.Description,
-                    p.Issues.Count, p.CreatedAt))
+                    p.Issues.Count, p.WipLimits, p.CreatedAt))
                 .ToListAsync();
             return Results.Ok(projects);
         });
@@ -60,6 +60,12 @@ public static class ProjectEndpoints
                 ?? throw ApiException.NotFound("Project not found");
             project.Name = req.Name?.Trim() ?? project.Name;
             project.Description = req.Description ?? project.Description;
+            if (req.WipLimits != null)
+            {
+                if (req.WipLimits.Length > 4096)
+                    throw ApiException.BadRequest("WipLimits JSON is too large (max 4096 chars)");
+                project.WipLimits = string.IsNullOrWhiteSpace(req.WipLimits) ? null : req.WipLimits;
+            }
             await db.SaveChangesAsync();
             return Results.Ok(project.ToDto());
         });
@@ -77,10 +83,10 @@ public static class ProjectEndpoints
 
 public record CreateProjectRequest(string Key, string Name, string? Description);
 
-public record UpdateProjectRequest(string? Name, string? Description);
+public record UpdateProjectRequest(string? Name, string? Description, string? WipLimits);
 
 public static class ProjectMapping
 {
     public static ProjectDto ToDto(this Project p) =>
-        new(p.Id, p.Key, p.Name, p.Description, p.Issues.Count, p.CreatedAt);
+        new(p.Id, p.Key, p.Name, p.Description, p.Issues.Count, p.WipLimits, p.CreatedAt);
 }

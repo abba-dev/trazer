@@ -8,6 +8,8 @@ public class Project
     public string? Description { get; set; }
     public Guid OwnerId { get; set; }
     public int LastIssueNumber { get; set; }
+    /// <summary>JSON object: { "ToDo": 5, "InProgress": 3, ... }. Per-status WIP cap. Null = no limit.</summary>
+    public string? WipLimits { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public User? Owner { get; set; }

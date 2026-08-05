@@ -302,6 +302,9 @@ namespace Trazer.Api.Migrations
                     b.Property<int>("LastIssueNumber")
                         .HasColumnType("integer");
 
+                    b.Property<string>("WipLimits")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
