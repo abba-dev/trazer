@@ -1,0 +1,17 @@
+# Force CRLF for Windows scripts — cmd.exe won't parse a .bat with
+# bare LF line endings (it treats the next line as one giant command and
+# either fails silently or with a cryptic "is not recognized" error).
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# Source code: keep the repo's LF default; tools like editors, prettier
+# and tsc handle both.
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.mjs       text eol=lf
+*.cs        text eol=lf
+*.css       text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
