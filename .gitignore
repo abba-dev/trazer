@@ -27,7 +27,7 @@ Thumbs.db
 
 # Uploads (runtime data)
 uploads/
-data/
+/data/
 
 # Logs
 *.log
