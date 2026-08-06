@@ -7,10 +7,10 @@ import {
   ChevronDown,
   Clock,
   Flag,
+  GitPullRequest,
   History,
   Loader2,
   MessageSquare,
-  Paperclip,
   PaperclipIcon,
   Plus,
   Save,
@@ -34,6 +34,8 @@ import {
   type Status,
 } from '../../lib/api'
 import { queryKeys } from '../../lib/query-keys'
+import { cn } from '../../lib/utils'
+import { useAuth } from '../../lib/auth'
 import { Button } from '../ui/button'
 import { Sheet, SheetContent } from '../ui/sheet'
 import { Textarea } from '../ui/textarea'
@@ -151,6 +153,17 @@ function IssueBody({ issue, projectKey, number }: { issue: Issue; projectKey: st
           <span className="font-mono font-medium tracking-tight text-foreground/80">{issue.key}</span>
           <span className="text-muted-foreground/40">·</span>
           <TypeBadge type={issue.type} />
+          {issue.pullRequestUrl && (
+            <a
+              href={issue.pullRequestUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground hover:text-foreground"
+            >
+              <GitPullRequest className="size-3" />
+              {issue.pullRequestState ?? 'PR'}
+            </a>
+          )}
           <span className="ml-auto flex items-center gap-1.5 tabular-nums">
             <Clock className="size-3 text-muted-foreground/70" />
             <span>Created {new Date(issue.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>

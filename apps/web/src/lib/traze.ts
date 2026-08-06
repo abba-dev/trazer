@@ -87,7 +87,7 @@ const STATUS_ORDER = ['ToDo', 'InProgress', 'InReview', 'QA', 'Done']
 const PRIORITY_ORDER = ['Urgent', 'High', 'Medium', 'Low']
 const TYPE_ORDER = ['Bug', 'Story', 'Task']
 
-function group<T>(issues: Issue[], key: (i: Issue) => string, order?: string[]): { label: string; value: number }[] {
+function group(issues: Issue[], key: (i: Issue) => string, order?: string[]): { label: string; value: number }[] {
   const map = new Map<string, number>()
   for (const i of issues) {
     const k = key(i)

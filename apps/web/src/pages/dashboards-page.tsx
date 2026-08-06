@@ -350,8 +350,8 @@ function BurndownWidgetBody() {
   if (!projects || projects.length === 0) {
     return <p className="text-xs text-muted-foreground">No projects yet. Create one to see a burndown.</p>
   }
-  if (!activeSprint) {
-    return <p className="text-xs text-muted-foreground">No active sprint in {firstProject.key}.</p>
+  if (!activeSprint || !firstProject) {
+    return <p className="text-xs text-muted-foreground">No active sprint in {firstProject?.key}.</p>
   }
 
   const points = buildBurndown(sprintIssues, historyQueries.map((q) => q.data ?? []), activeSprint)
@@ -363,9 +363,8 @@ function buildBurndown(issues: Issue[], histories: HistoryEntry[][], sprint: Spr
   const start = new Date(sprint.startDate).getTime()
   const end = sprint.endDate ? new Date(sprint.endDate).getTime() : Date.now()
   const days = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)))
-  const totalPoints = issues.reduce((s, i) => s + (i.estimate ?? 1), 0)
   // For each issue, find the date it was marked Done (or today if not done).
-  const completionDay = (i: Issue, idx: number): number => {
+  const completionDay = (idx: number): number => {
     const hist = histories[idx] ?? []
     const done = hist.find((h) => h.field === 'Status' && h.newValue === 'Done')
     if (!done) return days
@@ -374,7 +373,7 @@ function buildBurndown(issues: Issue[], histories: HistoryEntry[][], sprint: Spr
   }
   const points: { day: number; remaining: number }[] = []
   for (let d = 0; d <= days; d++) {
-    const remaining = issues.reduce((sum, i, idx) => sum + (completionDay(i, idx) >= d ? (i.estimate ?? 1) : 0), 0)
+    const remaining = issues.reduce((sum, i, idx) => sum + (completionDay(idx) >= d ? (i.estimate ?? 1) : 0), 0)
     points.push({ day: d, remaining })
   }
   return points

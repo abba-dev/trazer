@@ -26,6 +26,10 @@ public class Issue
     /// re-importing the same file updates instead of duplicating. Null for native issues.</summary>
     public string? SourceKey { get; set; }
 
+    /// <summary>Linked pull request surfaced in the issue panel (set by the Git webhook).</summary>
+    public string? PullRequestUrl { get; set; }
+    public string? PullRequestState { get; set; }
+
     public Project? Project { get; set; }
     public User? Assignee { get; set; }
     public User? Reporter { get; set; }

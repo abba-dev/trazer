@@ -10,14 +10,11 @@ namespace Trazer.Api.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AlterColumn<string>(
+            migrationBuilder.AddColumn<string>(
                 name: "WipLimits",
                 table: "Projects",
                 type: "text",
-                nullable: true,
-                oldClrType: typeof(string),
-                oldType: "jsonb",
-                oldNullable: true);
+                nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "SourceKey",
@@ -44,14 +41,9 @@ namespace Trazer.Api.Migrations
                 name: "SourceKey",
                 table: "Issues");
 
-            migrationBuilder.AlterColumn<string>(
+            migrationBuilder.DropColumn(
                 name: "WipLimits",
-                table: "Projects",
-                type: "jsonb",
-                nullable: true,
-                oldClrType: typeof(string),
-                oldType: "text",
-                oldNullable: true);
+                table: "Projects");
         }
     }
 }

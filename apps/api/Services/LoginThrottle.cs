@@ -5,8 +5,9 @@ namespace Trazer.Api.Services;
 // Per-IP login throttle: max 5 attempts in a 60s window, and on each failed attempt a
 // lockout that grows exponentially (60s, 2m, 4m, …) until the client logs in clean.
 // In-memory, single-process — right for a single-tenant instance.
+// Disabled in Development: dev boxes shouldn't lock you out of the admin console.
 // ponytail: no Redis, no sliding-window precision; sufficient for the PRD's 5/min/IP gate.
-public class LoginThrottle(ILogger<LoginThrottle> logger)
+public class LoginThrottle(ILogger<LoginThrottle> logger, IWebHostEnvironment env)
 {
     private const int MaxWindowAttempts = 5;
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
@@ -26,6 +27,7 @@ public class LoginThrottle(ILogger<LoginThrottle> logger)
     // Returns seconds the client must wait, or 0 when the request may proceed.
     public int Check(string ip)
     {
+        if (env.IsDevelopment()) return 0;
         var state = _states.GetOrAdd(ip, _ => new State());
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         lock (state)
@@ -49,6 +51,7 @@ public class LoginThrottle(ILogger<LoginThrottle> logger)
 
     public int ReportFailure(string ip)
     {
+        if (env.IsDevelopment()) return 0;
         var state = _states.GetOrAdd(ip, _ => new State());
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         lock (state)

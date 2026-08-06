@@ -26,6 +26,8 @@ public record IssueDto(
     string? ReleaseName,
     List<LabelDto> Labels,
     int? Estimate,
+    string? PullRequestUrl,
+    string? PullRequestState,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
@@ -95,6 +97,8 @@ public static class Mapping
             i.Release?.Name,
             [.. i.IssueLabels.OrderBy(il => il.Label!.Name).Select(il => il.Label!.ToDto())],
             i.Estimate,
+            i.PullRequestUrl,
+            i.PullRequestState,
             i.CreatedAt,
             i.UpdatedAt);
 }

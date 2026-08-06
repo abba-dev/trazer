@@ -4,7 +4,8 @@
 import { spawn, exec } from 'node:child_process'
 import { existsSync, writeFileSync, readFileSync, unlinkSync, openSync } from 'node:fs'
 import { promisify } from 'node:util'
-import { platform, tmpdir } from 'node:os'
+import { hostname, tmpdir, platform } from 'node:os'
+import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 import net from 'node:net'
@@ -51,16 +52,35 @@ const runNpm = (script, args) => new Promise((resolve, reject) => {
   proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`npm run ${script} exited ${code}`))))
 })
 
-async function waitFor(url, maxAttempts = 60, intervalMs = 3000) {
-  for (let i = 0; i < maxAttempts; i++) {
+async function waitFor(url, maxAttempts = 90, intervalMs = 1000) {
+  const width = 20
+  process.stdout.write(`waiting for ${url}\n`)
+  for (let i = 0; i <= maxAttempts; i++) {
+    if (i === maxAttempts) {
+      process.stdout.write(`\r[${' '.repeat(width)}] 100% - timeout, giving up\n`)
+      return false
+    }
+    const pct = Math.round((i / maxAttempts) * 100)
+    const filled = Math.round((i / maxAttempts) * width)
+    process.stdout.write(`\r[${'='.repeat(filled)}${' '.repeat(width - filled)}] ${String(pct).padStart(3)}%`)
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(2000) })
-      if (res.ok) return true
+      if (res.ok) {
+        process.stdout.write(`\r[${'='.repeat(width)}] 100% - up\n`)
+        return true
+      }
     } catch { /* not up yet */ }
     await new Promise((r) => setTimeout(r, intervalMs))
   }
-  return false
 }
+
+// ponytail: one-time credentials for the fresh-install admin bootstrap.
+// Fixed email (only ever created when Users is empty) + a 12-char
+// base64url password (no +/= chars that break copy-paste).
+const oneTimeAdmin = () => ({
+  email: 'admin@trazer.local',
+  password: randomBytes(9).toString('base64url'),
+})
 
 async function killTaskboardProcesses() {
   // ponytail: only kill dotnet + node whose path or command line mentions
@@ -148,9 +168,11 @@ async function checkPostgres() {
   const psql = await findPsql()
   if (!psql) return { ok: false, reason: 'no psql' }
   const psqlOk = await new Promise((resolve) => {
-    const useShell = !psql.includes('\\')
+    // ponytail: without PGPASSWORD psql waits forever on the password
+    // prompt. The dev user/db is always trazer/trazer (created below).
     const proc = spawn(psql, ['-h', 'localhost', '-U', 'trazer', '-d', 'trazer', '-c', 'SELECT 1'], {
-      stdio: 'pipe', shell: useShell, windowsHide: true,
+      stdio: 'pipe', shell: false, windowsHide: true,
+      env: { ...process.env, PGPASSWORD: 'trazer' },
     })
     proc.once('exit', (code) => resolve(code === 0))
     proc.once('error', () => resolve(false))
@@ -165,7 +187,7 @@ async function checkPostgres() {
 // path), or null if nothing is found.
 async function findPsql() {
   const inPath = await new Promise((resolve) => {
-    const proc = spawn('psql', ['--version'], { stdio: 'pipe', shell: true, windowsHide: true })
+    const proc = spawn('psql', ['--version'], { stdio: 'pipe', shell: false, windowsHide: true })
     proc.once('exit', (code) => resolve(code === 0))
     proc.once('error', () => resolve(false))
   })
@@ -193,14 +215,12 @@ async function runPsql(superuser, password, sql) {
   const env = { ...process.env }
   if (password) env.PGPASSWORD = password
   return new Promise((resolve, reject) => {
-    // ponytail: when psql is a full path (Windows fallback), spawn it
-    // directly without the shell so spaces in 'C:\Program Files\…' don't
-    // need quoting. When it's the bare 'psql', let the shell resolve PATH.
-    const useShell = !psql.includes('\\')
+    // ponytail: psql is an .exe — spawn it directly without a shell so
+    // spaces in 'C:\Program Files\…' never need quoting.
     const proc = spawn(
       psql,
       ['-h', 'localhost', '-U', superuser, '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-f', '-'],
-      { stdio: ['pipe', 'pipe', 'pipe'], env, shell: useShell, windowsHide: true },
+      { stdio: ['pipe', 'pipe', 'pipe'], env, shell: false, windowsHide: true },
     )
     let stderr = ''
     proc.stderr.on('data', (d) => { stderr += d.toString() })
@@ -275,9 +295,11 @@ const dev = {
       ...process.env,
       ConnectionStrings__Default: 'Host=localhost;Database=trazer;Username=trazer;Password=trazer',
       Jwt__Key: 'dev-only-secret-change-in-production',
+      Jwt__Issuer: 'trazer',
+      Jwt__Audience: 'trazer',
       ASPNETCORE_URLS: `http://localhost:${apiPort}`,
       ASPNETCORE_ENVIRONMENT: 'Development',
-      Demo__Enabled: 'true',
+      Demo__Enabled: process.env.Demo__Enabled ?? 'true',
       // vite.config.ts reads this for the /api proxy target — keeps the
       // web in sync if the API port changes.
       API_PROXY_TARGET: `http://localhost:${apiPort}`,
@@ -317,45 +339,66 @@ const dev = {
     console.log('starting dev stack (native, Postgres on :5432 assumed)...')
     await killTaskboardProcesses()
     const apiLogPath = path.join(tmpdir(), 'trazer-api.log')
-    const webLogPath = path.join(tmpdir(), 'trazer-web.log')
     const apiLogFd = openSync(apiLogPath, 'w')
-    const webLogFd = openSync(webLogPath, 'w')
-    const api = spawn('dotnet', ['run', '--project', 'apps/api', '--no-launch-profile'], {
+    // ponytail: `dotnet run` re-evaluates MSBuild every boot (slow). Build
+    // once up-front, then launch the compiled DLL directly — a rebuild only
+    // happens when sources actually changed.
+    console.log('building API (fast if nothing changed)...')
+    await execAsync('dotnet build apps/api -v q --nologo', { cwd: REPO })
+    const apiDll = path.join(REPO, 'apps/api/bin/Debug/net10.0/Trazer.Api.dll')
+    if (!existsSync(apiDll)) {
+      console.error(`API build produced no ${apiDll} — check build errors above.`)
+      process.exit(1)
+    }
+    const apiProc = spawn('dotnet', [apiDll], {
       cwd: REPO, env, detached: true, stdio: ['ignore', apiLogFd, apiLogFd], windowsHide: true,
     })
-    api.unref()
-    const web = spawn('npm', ['run', 'dev', '--', '--port', webPort], {
-      cwd: path.join(REPO, 'apps/web'), env, detached: true, stdio: ['ignore', webLogFd, webLogFd],
-      shell: isWindows, windowsHide: true,
-    })
-    web.unref()
-    // ponytail: surface child crashes with the log path so the user can
-    // post-mortem read what went wrong. detached: true means the parent
-    // can exit while children run, so the listeners are best-effort.
-    api.on('exit', (code, signal) => {
-      if (code !== 0 && code !== null) console.error(`[dev] API process exited (code ${code}). Tail of ${apiLogPath}:`)
-    })
-    web.on('exit', (code, signal) => {
-      if (code !== 0 && code !== null) console.error(`[dev] Web process exited (code ${code}). Tail of ${webLogPath}:`)
+    apiProc.unref()
+    // ponytail: the web dev server runs INHERIT in this console so you see
+    // Vite live in the same window as start.bat — no second cmd pops up.
+    // `detached` would give it its own console (a source of confusion).
+    const web = spawn(`npm run dev -- --port ${webPort}`, {
+      cwd: path.join(REPO, 'apps/web'), env, stdio: 'inherit', shell: isWindows,
     })
     // Save PIDs so dev.stop can kill exactly these processes
-    writeFileSync(pidFile, `${api.pid}\n${web.pid}\n`)
+    writeFileSync(pidFile, `${apiProc.pid}\n${web.pid}\n`)
     const apiOk = await waitFor(`http://localhost:${apiPort}/api/health`)
     const webOk = await waitFor(`http://localhost:${webPort}`)
     if (apiOk && webOk) {
       console.log('dev stack up (native)')
       console.log(`  api:  http://localhost:${apiPort}`)
       console.log(`  web:  http://localhost:${webPort}`)
-      console.log('  login: demo@trazer.dev / password123')
+      const cfg = await api('GET', '/api/config')
+      if (cfg.demo) {
+        console.log(`  login: ${cfg.demoEmail} / password123`)
+      } else if (cfg.setupRequired) {
+        const admin = oneTimeAdmin()
+        try {
+          await api('POST', '/api/auth/admin', {
+            email: admin.email,
+            name: 'Administrator',
+            password: admin.password,
+          })
+          console.log(`  first run: temporary admin credentials (change the password after first login):`)
+          console.log(`    email:    ${admin.email}`)
+          console.log(`    password: ${admin.password}`)
+          console.log(`  sign in at http://localhost:${webPort} to continue the setup wizard.`)
+        } catch (err) {
+          // Fall back to the in-browser setup wizard if the auto-bootstrap fails.
+          console.log(`  first run detected but auto-bootstrap failed (${err.message}) —`)
+          console.log(`  open http://localhost:${webPort} to complete setup in the browser.`)
+        }
+      } else {
+        console.log(`  already configured — sign in at http://localhost:${webPort}`)
+      }
       console.log('  stop: trazer dev stop')
       console.log(`  api log: ${apiLogPath}`)
-      console.log(`  web log: ${webLogPath}`)
+      console.log('  web: runs in this console — closing the window stops it')
     } else {
       console.error('dev stack failed to come up')
       console.error(`  api: ${apiOk ? 'up' : 'down'}`)
       console.error(`  web: ${webOk ? 'up' : 'down'}`)
       console.error(`  tail api log: ${apiLogPath}`)
-      console.error(`  tail web log: ${webLogPath}`)
       process.exit(1)
     }
   },
@@ -531,7 +574,7 @@ Env:
 
 // ponytail: export the testable internals so scripts/trazer.test.mjs can
 // unit-test them without going through the CLI subprocess.
-export { parseFlags, api, runNpm, waitFor, killTaskboardProcesses, prompt, promptPassword, checkPostgres, findPsql, runPsql, createTrazerDb }
+export { parseFlags, api, runNpm, waitFor, killTaskboardProcesses, prompt, promptPassword, checkPostgres, findPsql, runPsql, createTrazerDb, oneTimeAdmin }
 
 // Run the CLI dispatcher only when this file is invoked directly — not
 // when it's imported by the test runner (or anything else).

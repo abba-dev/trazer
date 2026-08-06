@@ -27,6 +27,8 @@ export type Issue = {
   releaseName: string | null
   labels: Label[]
   estimate: number | null
+  pullRequestUrl: string | null
+  pullRequestState: string | null
   position: number
   createdAt: string
   updatedAt: string
@@ -109,6 +111,8 @@ export const api = {
     request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body === undefined ? undefined : JSON.stringify(body) }),
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'PUT', body: body === undefined ? undefined : JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 
   async upload<T>(path: string, file: File): Promise<T> {
@@ -125,12 +129,14 @@ export const api = {
   },
 }
 
-export type AppConfig = { demo: boolean; demoEmail: string }
+export type AppConfig = { demo: boolean; demoEmail: string; setupRequired: boolean }
 
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<{ token: string; user: User }>('/auth/login', { email, password }),
   demoLogin: () => api.post<{ token: string; user: User }>('/auth/demo-login'),
+  bootstrapAdmin: (data: { email: string; name: string; password: string }) =>
+    api.post<{ token: string; user: User }>('/auth/admin', data),
   config: () => api.get<AppConfig>('/config'),
   me: () => api.get<User>('/auth/me'),
   users: () => api.get<User[]>('/auth/users'),
@@ -147,10 +153,12 @@ export const projectApi = {
   get: (key: string) => api.get<Project>(`/projects/${key}`),
   update: (key: string, data: { name?: string; description?: string; wipLimits?: string | null }) =>
     api.patch<Project>(`/projects/${key}`, data),
+  setGitSecret: (key: string, secret: string | null) =>
+    api.put<unknown>(`/projects/${key}/git-secret`, { secret }),
   export: (key: string, format: 'json' | 'csv') => {
     const token = getToken()
     const url = `/api/projects/${key}/export?format=${format}`
-    return fetch(`${API}${url}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    return fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
   },
   importJira: async (projectKey: string, file: File) => {
     const token = getToken()

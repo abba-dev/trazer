@@ -10,6 +10,9 @@ public class Project
     public int LastIssueNumber { get; set; }
     /// <summary>JSON object: { "ToDo": 5, "InProgress": 3, ... }. Per-status WIP cap. Null = no limit.</summary>
     public string? WipLimits { get; set; }
+
+    /// <summary>Shared secret for the inbound Git webhook (/api/git/webhook/{key}). Null = disabled.</summary>
+    public string? GitSecret { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public User? Owner { get; set; }

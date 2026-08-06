@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { parseFlags, api } from './trazer.mjs'
+import { parseFlags, api, oneTimeAdmin } from './trazer.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const cliPath = path.join(repo, 'scripts', 'trazer.mjs')
@@ -117,6 +117,15 @@ test('api: timeout aborts the fetch', async () => {
   }
   await api('GET', '/x', null, capturingFetch)
   assert.ok(captured.signal instanceof AbortSignal, 'api should pass an AbortSignal')
+})
+
+test('oneTimeAdmin: fixed email, unique-ish password with safe charset and >= 8 chars', () => {
+  const a = oneTimeAdmin()
+  assert.equal(a.email, 'admin@trazer.local')
+  assert.ok(a.password.length >= 8, 'password too short for the API (min 8)')
+  assert.match(a.password, /^[A-Za-z0-9_-]+$/, 'password must be copy-paste safe (base64url)')
+  const b = oneTimeAdmin()
+  assert.notEqual(a.password, b.password, 'each bootstrap must generate a fresh password')
 })
 
 // ---------- CLI subprocess smoke tests ----------

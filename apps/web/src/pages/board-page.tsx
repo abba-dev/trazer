@@ -5,7 +5,7 @@ import { DndContext, DragOverlay, PointerSensor, useDroppable, useSensor, useSen
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Plus } from 'lucide-react'
-import { filterApi, issueApi, projectApi, searchApi, sprintApi, STATUSES, type Issue, type Sprint, type Status } from '../lib/api'
+import { filterApi, issueApi, projectApi, searchApi, sprintApi, STATUSES, type Issue, type Status } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
 import { cn } from '../lib/utils'
 import { useListNav } from '../lib/use-list-nav'
@@ -76,13 +76,13 @@ export function BoardPage() {
 
   const visible = useMemo(() => {
     const sorted = [...mineFiltered].sort((a, b) => a.position - b.position)
-    return sorted.filter((i) => !hiddenColumns.has(columnKey(i, viewMode, sortedSprints)))
+    return sorted.filter((i) => !hiddenColumns.has(columnKey(i, viewMode)))
   }, [mineFiltered, hiddenColumns, viewMode, sortedSprints])
 
   const columnCounts = useMemo(() => {
     const counts: Record<string, number> = {}
     for (const i of mineFiltered) {
-      const k = columnKey(i, viewMode, sortedSprints)
+      const k = columnKey(i, viewMode)
       counts[k] = (counts[k] ?? 0) + 1
     }
     return counts
@@ -133,30 +133,6 @@ export function BoardPage() {
     onOpen: openIssue,
   })
 
-  // ponytail: Cmd+Shift+ArrowLeft/Right transitions the focused card to
-  // the previous/next status. Bound at the page level (not in
-  // useListNav) because the useListNav hook filters out modifier keys.
-  useEffect(() => {
-    if (viewMode !== 'status') return
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
-      if (!((e.metaKey || e.ctrlKey) && e.shiftKey)) return
-      if (selectedIndex < 0) return
-      const focused = visible[selectedIndex]
-      if (!focused) return
-      const curIdx = STATUSES.indexOf(focused.status)
-      if (curIdx < 0) return
-      const nextIdx = e.key === 'ArrowRight' ? curIdx + 1 : e.key === 'ArrowLeft' ? curIdx - 1 : -1
-      if (nextIdx < 0 || nextIdx >= STATUSES.length) return
-      const targetStatus = STATUSES[nextIdx]!
-      const target = (issues ?? []).filter((i) => i.status === targetStatus)
-      move.mutate({ id: focused.id, target: { type: 'status', value: targetStatus }, position: target.length })
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [viewMode, selectedIndex, visible, issues, move])
-
   const [newFor, setNewFor] = useState<{ type: ViewMode; value: string | null } | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const createDefaults = newFor
@@ -205,6 +181,30 @@ export function BoardPage() {
       void queryClient.invalidateQueries({ queryKey: ['search'] })
     },
   })
+
+  // ponytail: Cmd+Shift+ArrowLeft/Right transitions the focused card to
+  // the previous/next status. Bound at the page level (not in
+  // useListNav) because the useListNav hook filters out modifier keys.
+  useEffect(() => {
+    if (viewMode !== 'status') return
+    const onKey = (e: KeyboardEvent) => {
+      const evtTarget = e.target as HTMLElement | null
+      if (evtTarget && (evtTarget.tagName === 'INPUT' || evtTarget.tagName === 'TEXTAREA' || evtTarget.isContentEditable)) return
+      if (!((e.metaKey || e.ctrlKey) && e.shiftKey)) return
+      if (selectedIndex < 0) return
+      const focused = visible[selectedIndex]
+      if (!focused) return
+      const curIdx = STATUSES.indexOf(focused.status)
+      if (curIdx < 0) return
+      const nextIdx = e.key === 'ArrowRight' ? curIdx + 1 : e.key === 'ArrowLeft' ? curIdx - 1 : -1
+      if (nextIdx < 0 || nextIdx >= STATUSES.length) return
+      const targetStatus = STATUSES[nextIdx]!
+      const target = (issues ?? []).filter((i) => i.status === targetStatus)
+      move.mutate({ id: focused.id, target: { type: 'status', value: targetStatus }, position: target.length })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [viewMode, selectedIndex, visible, issues, move])
 
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -350,7 +350,7 @@ export function BoardPage() {
   )
 }
 
-function columnKey(issue: Issue, view: ViewMode, sprints: Sprint[]): string {
+function columnKey(issue: Issue, view: ViewMode): string {
   if (view === 'status') return issue.status
   if (issue.sprintId == null) return 'backlog'
   return issue.sprintId
@@ -384,13 +384,11 @@ function QuickFilterChip({
 }
 
 function BoardColumn({
-  columnKey: key,
   title,
   dot,
   issues,
   visible,
   target,
-  viewMode,
   wipLimit,
   selectedIndex,
   setItemRef,

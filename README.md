@@ -76,10 +76,24 @@ Prereqs: Docker.
    ```
 3. **Open** `http://localhost:3000`.
 
+## First run
+
+Two fresh-install paths, curated by what the API reports via
+`GET /api/config`:
+
+- **Empty database** (`setupRequired: true`) — the dev script
+  (`node scripts/trazer.mjs dev`) bootstraps the first admin for you and
+  prints one-time `email` + `password` on the console. Log in with those
+  (change the password after your first login). The web UI also shows a
+  two-step setup wizard (create admin → create first project) if you'd
+  rather type it yourself.
+- **Demo mode** (`Demo__Enabled=true`) — demo data is seeded and the
+  demo login is available (`demo@trazer.dev`). With the flag off, no demo
+  of anything ships.
+
 ## Step by step
 
-1. **Sign in** with the seeded admin (or bootstrap your own:
-   `npx trazer admin create --email=me@x --password=...`).
+1. **Sign in** with the credentials the first-run flow printed.
 2. **Create a project** with a short key — it shows up in every issue
    (`GAME-1`, `GAME-2`).
 3. **Add an issue** with `Ctrl+N`. Title, type, priority. Done.
@@ -88,6 +102,44 @@ Prereqs: Docker.
 5. **Find it** with TQ: `Ctrl+K`, then `assignee = me` or `GAME-1`.
 6. **Script it** with the CLI: `npx trazer issue create GAME "Fix the bug"`
    from your terminal or CI.
+
+## Git integration
+
+Link a project to GitHub or GitLab and Trazer keeps up with pull
+requests without leaving your workflow:
+
+- **Set the secret** in *Project settings → Git* — Trazer stores it
+  per-project, never returns it after save.
+- **Add the webhook** to your repo:
+  - GitHub: `POST https://your-host/api/git/webhook/GAME` → Content type
+    `application/json`, secret = the one above.
+  - GitLab: same URL, X-Gitlab-Token = the secret.
+- **What happens:** PRs mentioning `GAME-42` in title/body link that
+  issue to the PR (shown in the issue panel, with open/merged state).
+  Commit messages like `fixes GAME-42` auto-close the issue on push.
+
+Unauthenticated by design — verified by HMAC-SHA256 (GitHub) or the
+shared token (GitLab). No secret, no link, no state change.
+
+## Admin console
+
+A local GUI (no browser, no server) for day-to-day user administration:
+
+```sh
+python trazer-admin.py          # run from source
+build-admin.bat                 # or build a standalone trazer-admin.exe (PyInstaller)
+```
+
+It locks itself with local credentials (created on first run, stored
+beside the script — never sent anywhere) and talks to the Trazer API
+with your admin account. Create/list users, reset passwords, disable
+accounts; every action is written to an audit log.
+
+## API docs
+
+`GET /api/docs` renders the endpoint list straight from the generated
+OpenAPI 3.1 spec at `/api/openapi.json` — no Swagger UI, no CDN, works
+behind the strict CSP.
 
 ## Search like a query
 
@@ -133,7 +185,9 @@ A small CLI for scripting against the API:
 npx trazer issue list GAME
 npx trazer issue create GAME "Fix the bug"
 npx trazer issue update GAME-1 --status=Done
+npx trazer issue comment GAME-1 "looks good"
 npx trazer user me
+npx trazer config show
 ```
 
 Set `TRAZER_TOKEN` (a JWT or API token) and `TRAZER_API` (default
@@ -149,9 +203,34 @@ running commands (`dev:*`) belong in a sub-agent per
 
 ## Before going to production
 
-The dev defaults work for local. For a real server, set `Jwt__Key` to
-a 32+ char random string (`openssl rand -base64 48`) — otherwise anyone
-can forge tokens.
+The dev defaults work for local. For a real server:
+
+- Set `Jwt__Key` to a 32+ char random string
+  (`openssl rand -base64 48`) — otherwise anyone can forge tokens.
+- Set `Demo__Enabled=false` (default) so no demo data or demo-login
+  endpoint ship.
+
+### Encryption at rest
+
+Trazer stores no secrets of its own — passwords are bcrypt hashes, tokens
+are JWTs. The data itself (issues, comments, attachments) is protected at
+the filesystem level, so encryption is an operator concern, not an app
+feature. The supported posture is **AES-256 full-disk/volume encryption**:
+
+| OS | Mechanism |
+|---|---|
+| Linux | [LUKS](https://gitlab.com/cryptsetup/cryptsetup) on the volume holding the Postgres data dir (`/var/lib/postgresql`) and any attachment mount |
+| macOS | [FileVault](https://support.apple.com/en-us/102660) (full-disk) on the boot volume |
+| Windows | BitLocker on the system and data volumes |
+
+Trazer itself never implements per-field encryption — it would break
+search (`title`, `description`, `text` are indexed and queried) and the
+strict schema. If the volume is encrypted, the whole database and all
+attachments are at rest; nothing to configure per-project.
+
+Verify after setup that the volume is truly encrypted
+(`lsblk -o NAME,TYPE,FSTYPE,MOUNTPOINT` on Linux, System Settings →
+Privacy & Security → FileVault on macOS) before relying on it.
 
 ## Why
 

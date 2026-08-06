@@ -41,3 +41,17 @@ moodboard/
 
 # Internal scratchpads (prompts to other models — never commit)
 PROMPT_*.md
+
+# Python (admin console)
+__pycache__/
+build/
+
+# Admin console local state (credentials / audit trail — never commit)
+trazer-admin-auth.json
+trazer-admin-config.json
+trazer-admin-audit.log
+trazer-admin.spec
+
+# Private docs (PRDs, design notes)
+Trazer-PRD-*.pdf
+*.prd.pdf

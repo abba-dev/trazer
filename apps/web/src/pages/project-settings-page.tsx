@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Copy, Download, ExternalLink, FileJson, FileText, Loader2, Plus, Settings as SettingsIcon, Trash2, Upload, Users, Webhook } from 'lucide-react'
+import { AlertTriangle, Copy, Download, ExternalLink, FileJson, FileText, GitBranch, Loader2, Plus, Settings as SettingsIcon, Trash2, Upload, Users, Webhook } from 'lucide-react'
 import { issueApi, projectApi, authApi, STATUSES, webhookApi, type ImportReport } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
+import { cn } from '../lib/utils'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Textarea } from '../components/ui/textarea'
@@ -120,6 +121,8 @@ export function ProjectSettingsPage() {
       <ExportSection projectKey={projectKey!} />
 
       <ImportSection projectKey={projectKey!} />
+
+      <GitSection projectKey={projectKey!} />
 
       <section className="rounded-lg border border-destructive/30 bg-destructive/5 p-5">
         <h3 className="mb-2 text-sm font-semibold text-destructive">Danger zone</h3>
@@ -358,6 +361,62 @@ function ImportSection({ projectKey }: { projectKey: string }) {
           )}
         </div>
       )}
+    </section>
+  )
+}
+
+function GitSection({ projectKey }: { projectKey: string }) {
+  const [secret, setSecret] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const save = useMutation({
+    mutationFn: () => projectApi.setGitSecret(projectKey, secret.trim() ? secret.trim() : null),
+    onSuccess: () => { setSaved(true); setError(null) },
+    onError: (e) => setError(e instanceof Error ? e.message : 'Save failed'),
+  })
+
+  const webhookUrl = `${window.location.origin}/api/git/webhook/${projectKey}`
+
+  return (
+    <section className="mb-6 rounded-lg border bg-card p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <GitBranch className="size-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold">Git integration</h3>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Auto-close issues from commit messages (<code className="text-foreground/70">fixes {projectKey}-42</code>)
+        and link pull requests to issues. Point a GitHub/GitLab webhook at the URL below — commits matching
+        <code className="text-foreground/70"> fix(es)/close(s)/resolve(s) {projectKey}-N</code> move the issue to Done.
+      </p>
+      <div className="mb-3 flex flex-col gap-1.5">
+        <label className="text-[11px] font-medium text-muted-foreground">Webhook URL</label>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 truncate rounded-md border bg-background/60 px-2 py-1 text-[11px] text-foreground/80">{webhookUrl}</code>
+          <Button size="sm" variant="outline" onClick={() => { void navigator.clipboard.writeText(webhookUrl) }}>
+            Copy
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-[11px] font-medium text-muted-foreground">
+          Webhook secret <span className="text-muted-foreground/60">(GitHub: as signing secret · GitLab: as token)</span>
+        </label>
+        <div className="flex items-center gap-2">
+          <Input
+            value={secret}
+            onChange={(e) => { setSecret(e.target.value); setSaved(false) }}
+            placeholder="shared secret — empty clears the integration"
+            className="font-mono text-xs"
+          />
+          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
+            {save.isPending ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : null}
+            Save
+          </Button>
+        </div>
+        {saved && <p className="text-[11px] text-emerald-600">Saved. Configure the webhook in your Git host with this secret.</p>}
+        {error && <p className="text-[11px] text-destructive">{error}</p>}
+      </div>
     </section>
   )
 }
